@@ -37,10 +37,12 @@ extern const AP_HAL::HAL& hal;
   On Pixhawk this gives 724 waypoints, 50 rally points and 84 fence points
  */
 const StorageManager::StorageArea StorageManager::layout_default[STORAGE_NUM_AREAS] PROGMEM = {
+#if STORAGE_NUM_AREAS >= 4
     { StorageParam,   0,     1280}, // 0x500 parameter bytes
     { StorageMission, 1280,  2506},
     { StorageRally,   3786,   150}, // 10 rally points
     { StorageFence,   3936,   160}, // 20 fence points
+#endif
 #if STORAGE_NUM_AREAS >= 8
     { StorageParam,   4096,  1280},
     { StorageRally,   5376,   300},
@@ -64,10 +66,12 @@ const StorageManager::StorageArea StorageManager::layout_default[STORAGE_NUM_ARE
   On Pixhawk this gives 718 waypoints, 46 rally points and 70 fence points
  */
 const StorageManager::StorageArea StorageManager::layout_copter[STORAGE_NUM_AREAS] PROGMEM = {
+#if STORAGE_NUM_AREAS >= 4
     { StorageParam,   0,     1536}, // 0x600 param bytes
     { StorageMission, 1536,  2422},
     { StorageRally,   3958,    90}, // 6 rally points
     { StorageFence,   4048,    48}, // 6 fence points
+#endif
 #if STORAGE_NUM_AREAS >= 8
     { StorageParam,   4096,  1280},
     { StorageRally,   5376,   300},

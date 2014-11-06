@@ -9,7 +9,7 @@
 
 using namespace YUNEEC;
 
-void YUNEECRCOutput::init(void* machtnichts) {
+void YUNEECRCOutputPWM::init(void* machtnichts) {
 	GPIO_InitTypeDef GPIO_InitStructure;
 	TIM_TimeBaseInitTypeDef  TIM_TimeBaseStructure;
 	TIM_OCInitTypeDef  TIM_OCInitStructure;
@@ -190,7 +190,7 @@ void YUNEECRCOutput::init(void* machtnichts) {
 #endif
 }
 
-void YUNEECRCOutput::set_freq(uint32_t chmask, uint16_t freq_hz) {
+void YUNEECRCOutputPWM::set_freq(uint32_t chmask, uint16_t freq_hz) {
 	uint32_t period = 1000000 / freq_hz - 1;
 #ifdef USE_ESC_RAIL
     if ((chmask & ( _BV(CH_1) | _BV(CH_5))) != 0) {
@@ -223,7 +223,7 @@ void YUNEECRCOutput::set_freq(uint32_t chmask, uint16_t freq_hz) {
 #endif
 }
 
-uint16_t YUNEECRCOutput::get_freq(uint8_t ch) {
+uint16_t YUNEECRCOutputPWM::get_freq(uint8_t ch) {
     uint32_t ARR_Value = 0;
 
 #ifdef USE_ESC_RAIL
@@ -250,7 +250,7 @@ uint16_t YUNEECRCOutput::get_freq(uint8_t ch) {
     return (1000000 / (ARR_Value + 1));
 }
 
-void YUNEECRCOutput::enable_ch(uint8_t ch) {
+void YUNEECRCOutputPWM::enable_ch(uint8_t ch) {
 #ifdef USE_ESC_RAIL
     switch (ch) {
         case CH_1: TIM_CCxCmd(TIM2, TIM_Channel_1, TIM_CCx_Enable); break;
@@ -281,7 +281,7 @@ void YUNEECRCOutput::enable_ch(uint8_t ch) {
 
 
 
-void YUNEECRCOutput::disable_ch(uint8_t ch) {
+void YUNEECRCOutputPWM::disable_ch(uint8_t ch) {
 #ifdef USE_ESC_RAIL
     switch (ch) {
         case CH_1: TIM_CCxCmd(TIM2, TIM_Channel_1, TIM_CCx_Disable); break;
@@ -316,7 +316,7 @@ static inline uint16_t constrain_period(uint16_t p) {
     return p;
 }
 
-void YUNEECRCOutput::write(uint8_t ch, uint16_t period_us) {
+void YUNEECRCOutputPWM::write(uint8_t ch, uint16_t period_us) {
     uint16_t pwm = constrain_period(period_us);
 
 #ifdef USE_ESC_RAIL
@@ -346,13 +346,13 @@ void YUNEECRCOutput::write(uint8_t ch, uint16_t period_us) {
 #endif
 }
 
-void YUNEECRCOutput::write(uint8_t ch, uint16_t* period_us, uint8_t len) {
+void YUNEECRCOutputPWM::write(uint8_t ch, uint16_t* period_us, uint8_t len) {
     for (int i = 0; i < len; i++) {
         write(i + ch, period_us[i]);
     }
 }
 
-uint16_t YUNEECRCOutput::read(uint8_t ch) {
+uint16_t YUNEECRCOutputPWM::read(uint8_t ch) {
 	uint16_t pwm = 0;
 
 #ifdef USE_ESC_RAIL
@@ -384,7 +384,7 @@ uint16_t YUNEECRCOutput::read(uint8_t ch) {
     return pwm;
 }
 
-void YUNEECRCOutput::read(uint16_t* period_us, uint8_t len) {
+void YUNEECRCOutputPWM::read(uint16_t* period_us, uint8_t len) {
     for (int i = 0; i < len; i++) {
         period_us[i] = read(i);
     }

@@ -70,8 +70,7 @@ void YUNEECScheduler::register_timer_process(AP_HAL::MemberProc proc) {
 
     if (_num_timer_procs < YUNEEC_SCHEDULER_MAX_TIMER_PROCS) {
         __disable_irq();
-        _timer_proc[_num_timer_procs] = proc;
-        _num_timer_procs++;
+        _timer_proc[_num_timer_procs++] = proc;
         __enable_irq();
     } else {
         hal.console->printf("Out of timer processes\n");
@@ -131,7 +130,7 @@ void YUNEECScheduler::panic(const prog_char_t *errormsg) {
 }
 
 void YUNEECScheduler::reboot(bool hold_in_bootloader) {
-    hal.uartA->println_P(PSTR("GOING DOWN FOR A REBOOT\r\n"));
+    hal.console->println_P(PSTR("GOING DOWN FOR A REBOOT\r\n"));
     hal.scheduler->delay(100);
     NVIC_SystemReset();
 }

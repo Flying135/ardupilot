@@ -23,6 +23,7 @@
 #include <ToshibaLED.h>
 #include <ToshibaLED_I2C.h>
 #include <ToshibaLED_PX4.h>
+#include <ToshibaLED_YUNEEC.h>
 #include <ToneAlarm_PX4.h>
 #include <ExternalLED.h>
 #include <Buzzer.h>
@@ -74,6 +75,8 @@ private:
     ToshibaLED_I2C toshibaled;
     ExternalLED externalled;
     Buzzer buzzer;
+#elif CONFIG_HAL_BOARD == HAL_BOARD_YUNEEC
+    ToshibaLED_YUNEEC toshibaled;
 #else
     ToshibaLED_I2C toshibaled;
 #endif

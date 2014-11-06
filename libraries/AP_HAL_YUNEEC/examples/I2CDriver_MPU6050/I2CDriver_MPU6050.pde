@@ -6,6 +6,7 @@
 
 #include <stdarg.h>
 #include <AP_Common.h>
+#include <StorageManager.h>
 #include <AP_Progmem.h>
 #include <AP_HAL.h>
 #include <AP_HAL_AVR.h>
@@ -22,6 +23,7 @@
 #include <Filter.h>
 #include <DataFlash.h>
 #include <GCS_MAVLink.h>
+#include <AP_Terrain.h>
 #include <AP_Mission.h>
 #include <AP_AHRS.h>
 #include <AP_Airspeed.h>

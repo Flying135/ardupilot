@@ -13,9 +13,9 @@ YUNEECUARTDriverHandler(USART1, 0);
 YUNEECUARTDriverHandler(USART2, 1);
 YUNEECUARTDriverHandler(USART3, 2);
 
-static YUNEECUARTDriverInstance(USART1, 0);
-static YUNEECUARTDriverInstance(USART2, 1);
-static YUNEECUARTDriverInstance(USART3, 2);
+YUNEECUARTDriverInstance(USART1, 0);
+YUNEECUARTDriverInstance(USART2, 1);
+YUNEECUARTDriverInstance(USART3, 2);
 
 static YUNEECSemaphore  		i2c1Semaphore;
 static YUNEECSemaphore  		i2c2Semaphore;
@@ -26,18 +26,18 @@ static YUNEECSPIDeviceManager 	spiDeviceManager;
 static YUNEECAnalogIn 			analogIn;
 static YUNEECStorage 			storageDriver;
 static YUNEECGPIO 				gpioDriver;
-static YUNEECRCInputDSM 		rcinDriver;
-static YUNEECRCOutput 			rcoutDriver;
+static YUNEECRCInputST24 		rcinDriver;
+static YUNEECRCOutputESCBUS		rcoutDriver;
 static YUNEECScheduler 			schedulerInstance;
 static YUNEECUtil 				utilInstance;
 
 HAL_YUNEEC::HAL_YUNEEC() :
     AP_HAL::HAL(
-        &USART1Driver,
-        &USART3Driver,
-        &USART2Driver,
-        NULL,            /* no uartD */
-        NULL,            /* no uartE */
+        &USART1Driver,	/* console/GCS */
+        &USART2Driver,	/* 1st GPS */
+        &USART3Driver,	/* Tx-ESCbus/Rx-ST24 */
+        NULL,           /* telem2: no uartD */
+        NULL,           /* 2nd GPS: no uartE */
         &I2C1Driver,
         &I2C2Driver,
         &spiDeviceManager,
@@ -56,7 +56,7 @@ void HAL_YUNEEC::init(int argc,char* const argv[]) const {
      * up to the programmer to do this in the correct order.
      * Scheduler should likely come first. */
     scheduler->init(NULL);
-    uartA->begin(115200);
+    console->begin(115200);
     rcin->init(NULL);
     rcout->init(NULL);
     analogin->init(NULL);

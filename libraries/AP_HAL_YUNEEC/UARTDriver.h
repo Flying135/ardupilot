@@ -42,6 +42,11 @@ public:
 		uint8_t *bytes;					///< pointer to allocated buffer
 	} Buffer;
 
+
+	// This is used for multiple parsing char feature
+//	void multi_parse_read_start(void);
+//	void multi_parse_read_restore(void);
+
 private:
 	// Specify info of USART port
 	struct USART_Info{
@@ -63,6 +68,9 @@ private:
 	// ring buffers
 	volatile Buffer	*const 	_rxBuffer;
 	volatile Buffer	*const 	_txBuffer;
+
+	// multiple parsing read
+	volatile uint8_t _last_tail;
 
 	// whether writes to the port should block waiting
 	// for enough space to appear
@@ -103,8 +111,8 @@ extern volatile YUNEEC::YUNEECUARTDriver::Buffer __YUNEECUARTDriver__txBuffer[];
 // USART Interrupt Handlers
 //----------------------------------------------------------------------------
 inline void UARTBufferUpdater(USART_TypeDef* usart, uint8_t portNum) {
-	uint8_t c;
-	uint8_t i;
+	static uint8_t c;
+	static uint8_t i;
 
 	if((usart->CR1 & USART_FLAG_RXNE) && (usart->ISR & USART_FLAG_RXNE)) {
 		/* read the byte as quickly as possible */

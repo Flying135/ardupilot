@@ -38,7 +38,7 @@ extern const AP_HAL::HAL& hal;
   only do detailed hardware logging on boards likely to have more log
   storage space
  */
-#if HAL_CPU_CLASS >= HAL_CPU_CLASS_75
+#if HAL_CPU_CLASS >= HAL_CPU_CLASS_75 && CONFIG_HAL_BOARD != HAL_BOARD_YUNEEC
 #define UBLOX_HW_LOGGING 1
 #else
 #define UBLOX_HW_LOGGING 0

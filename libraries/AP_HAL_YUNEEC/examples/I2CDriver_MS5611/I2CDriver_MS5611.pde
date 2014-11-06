@@ -6,12 +6,28 @@
 
 #include <AP_Common.h>
 #include <AP_Math.h>
+#include <StorageManager.h>
 #include <AP_Param.h>
 #include <AP_Progmem.h>
 
 #include <AP_HAL.h>
 #include <AP_HAL_YUNEEC.h>
+#include <AP_Notify.h>
 #include <AP_Baro.h>
+#include <AP_GPS.h>
+#include <AP_Vehicle.h>
+#include <GCS_MAVLink.h>
+#include <DataFlash.h>
+#include <AP_InertialSensor.h>
+#include <AP_Mission.h>
+#include <StorageManager.h>
+#include <AP_Terrain.h>
+#include <AP_ADC.h>
+#include <AP_ADC_AnalogSource.h>
+#include <AP_AHRS.h>
+#include <AP_Compass.h>
+#include <AP_Declination.h>
+#include <AP_Airspeed.h>
 #include <Filter.h>             // Filter library
 #include <utility/pinmap_typedef.h>
 
@@ -43,7 +59,8 @@ void loop()
         timer = hal.scheduler->micros();
         baro.read();
         uint32_t read_time = hal.scheduler->micros() - timer;
-        if (!baro.healthy) {
+        float alt = baro.get_altitude();
+        if (!baro.healthy()) {
             hal.console->println("not healthy");
             return;
         }
@@ -54,7 +71,7 @@ void loop()
         hal.console->print(" Temperature:");
         hal.console->print(baro.get_temperature());
         hal.console->print(" Altitude:");
-        hal.console->print(baro.get_altitude());
+        hal.console->print(alt);
         hal.console->printf(" climb=%.2f t=%u samples=%u",
                       baro.get_climb_rate(),
                       (unsigned)read_time,

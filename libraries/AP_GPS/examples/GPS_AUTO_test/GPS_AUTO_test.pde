@@ -52,6 +52,13 @@ void setup()
 
     // initialise the leds
     board_led.init();
+
+    for (int i = 0; i < 6; i++) {
+    	hal.rcout->enable_ch(i);
+    }
+
+    gps.init(NULL);
+    hal.scheduler->delay(5000);
 }
 
 void loop()

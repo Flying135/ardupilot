@@ -21,6 +21,7 @@
 #include <AP_HAL_Linux.h>
 #include <AP_HAL_PX4.h>
 #include <AP_HAL_Empty.h>
+#include <AP_HAL_YUNEEC.h>
 #include <AP_HAL_FLYMAPLE.h>
 #include <AP_Notify.h>          // Notify library
 #include <ToshibaLED.h>
@@ -36,6 +37,8 @@ const AP_HAL::HAL& hal = AP_HAL_BOARD_DRIVER;
 
 #if CONFIG_HAL_BOARD == HAL_BOARD_PX4
 static ToshibaLED_PX4 toshiba_led;
+#elif CONFIG_HAL_BOARD == HAL_BOARD_YUNEEC
+static ToshibaLED_YUNEEC toshiba_led;
 #else
 static ToshibaLED_I2C toshiba_led;
 #endif

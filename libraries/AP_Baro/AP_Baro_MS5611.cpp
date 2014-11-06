@@ -337,9 +337,9 @@ bool AP_Baro_MS5611::init()
     uint32_t tstart = hal.scheduler->millis();
     while (!_updated) {
         hal.scheduler->delay(10);
-        if (hal.scheduler->millis() - tstart > 1000) {
+        if (hal.scheduler->millis() - tstart > 5000) {
             hal.scheduler->panic(PSTR("PANIC: AP_Baro_MS5611 took more than "
-                        "1000ms to initialize"));
+                        "5000ms to initialize"));
             _flags.healthy = false;
             return false;
         }

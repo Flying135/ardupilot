@@ -47,6 +47,7 @@ void setPinMode(GPIO_TypeDef* port, uint16_t bit, uint8_t output) {
 
 	GPIO_Init(port, &GPIO_InitStructure);
 }
+
 YUNEECGPIO::YUNEECGPIO()
 {}
 
@@ -117,7 +118,7 @@ bool YUNEECGPIO::attach_interrupt(uint8_t interrupt_num, AP_HAL::Proc p, uint8_t
 	return false;
 }
 
-bool    YUNEECGPIO::usb_connected(void)
+bool YUNEECGPIO::usb_connected(void)
 {
 	return false;
 }

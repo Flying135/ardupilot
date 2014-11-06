@@ -55,7 +55,7 @@ private:
     AP_HAL::Semaphore* _semaphore;
     uint8_t _lockup_count;
     bool _ignore_errors;
-    uint16_t _timeout;
+    static uint16_t _timeout;
 
     static void _i2c_bus_reset(struct I2C_Info &i2c_info);
     static void _i2c_config(struct I2C_Info &i2c_info);

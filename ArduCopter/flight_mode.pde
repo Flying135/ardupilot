@@ -25,7 +25,7 @@ static bool set_mode(uint8_t mode)
             #if FRAME_CONFIG == HELI_FRAME
                 success = heli_acro_init(ignore_checks);
             #else
-                success = acro_init(ignore_checks);
+//                success = acro_init(ignore_checks);
             #endif
             break;
 
@@ -72,15 +72,15 @@ static bool set_mode(uint8_t mode)
 #endif
 
         case DRIFT:
-            success = drift_init(ignore_checks);
+//            success = drift_init(ignore_checks);
             break;
 
         case SPORT:
-            success = sport_init(ignore_checks);
+//            success = sport_init(ignore_checks);
             break;
 
         case FLIP:
-            success = flip_init(ignore_checks);
+//            success = flip_init(ignore_checks);
             break;
 
 #if AUTOTUNE_ENABLED == ENABLED
@@ -131,7 +131,7 @@ static void update_flight_mode()
             #if FRAME_CONFIG == HELI_FRAME
                 heli_acro_run();
             #else
-                acro_run();
+//                acro_run();
             #endif
             break;
 
@@ -178,15 +178,15 @@ static void update_flight_mode()
 #endif
 
         case DRIFT:
-            drift_run();
+//            drift_run();
             break;
 
         case SPORT:
-            sport_run();
+//            sport_run();
             break;
 
         case FLIP:
-            flip_run();
+//            flip_run();
             break;
 
 #if AUTOTUNE_ENABLED == ENABLED

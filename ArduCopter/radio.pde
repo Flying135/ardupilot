@@ -57,7 +57,7 @@ static void init_rc_out()
     g.rc_3.set_range_out(0,1000);
 
     // check if we should enter esc calibration mode
-    esc_calibration_startup_check();
+//    esc_calibration_startup_check();
 
     // enable output to motors
     pre_arm_rc_checks();

@@ -31,7 +31,9 @@ namespace YUNEEC {
     class YUNEECDigitalSource;
     class YUNEECRCInputPPM;
     class YUNEECRCInputDSM;
-    class YUNEECRCOutput;
+    class YUNEECRCInputST24;
+    class YUNEECRCOutputPWM;
+    class YUNEECRCOutputESCBUS;
     class YUNEECSemaphore;
     class YUNEECScheduler;
     class YUNEECUtil;

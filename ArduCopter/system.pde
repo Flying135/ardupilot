@@ -100,26 +100,26 @@ static void init_ardupilot()
 #if GPS_PROTOCOL != GPS_PROTOCOL_IMU
     // standard gps running. Note that we need a 256 byte buffer for some
     // GPS types (eg. UBLOX)
-    hal.uartB->begin(38400, 256, 16);
+//    hal.uartB->begin(38400, 256, 16);
 #endif
 
-#if GPS2_ENABLE
-    if (hal.uartE != NULL) {
-        hal.uartE->begin(38400, 256, 16);
-    }
-#endif
+//#if GPS2_ENABLE
+//    if (hal.uartE != NULL) {
+//        hal.uartE->begin(38400, 256, 16);
+//    }
+//#endif
 
     cliSerial->printf_P(PSTR("\n\nInit " FIRMWARE_STRING
                          "\n\nFree RAM: %u\n"),
                         hal.util->available_memory());
 
-#if CONFIG_HAL_BOARD == HAL_BOARD_APM2
-    /*
-      run the timer a bit slower on APM2 to reduce the interrupt load
-      on the CPU
-     */
-    hal.scheduler->set_timer_speed(500);
-#endif
+//#if CONFIG_HAL_BOARD == HAL_BOARD_APM2
+//    /*
+//      run the timer a bit slower on APM2 to reduce the interrupt load
+//      on the CPU
+//     */
+//    hal.scheduler->set_timer_speed(500);
+//#endif
 
     //
     // Report firmware version code expect on console (check of actual EEPROM format version is done in load_parameters function)
@@ -132,18 +132,18 @@ static void init_ardupilot()
 //    BoardConfig.init();
 
     // init EPM cargo gripper
-#if EPM_ENABLED == ENABLED
-    epm.init();
-#endif
+//#if EPM_ENABLED == ENABLED
+//    epm.init();
+//#endif
 
     // initialise notify system
-    // disable external leds if epm is enabled because of pin conflict on the APM
-    notify.init(true);
+    // no external leds
+    notify.init(false);
 
     // initialise battery monitor
     battery.init();
     
-    rssi_analog_source      = hal.analogin->channel(g.rssi_pin);
+//    rssi_analog_source      = hal.analogin->channel(g.rssi_pin);
 
     barometer.init();
 
@@ -160,45 +160,45 @@ static void init_ardupilot()
     ap.usb_connected = true;
     check_usb_mux();
 
-#if CONFIG_HAL_BOARD != HAL_BOARD_APM2 && CONFIG_HAL_BOARD != HAL_BOARD_YUNEEC
-    // we have a 2nd serial port for telemetry on all boards except
-    // APM2. We actually do have one on APM2 but it isn't necessary as
-    // a MUX is used
-    gcs[1].setup_uart(hal.uartC, map_baudrate(g.serial1_baud), 128, 128);
-#endif
-
-#if MAVLINK_COMM_NUM_BUFFERS > 2
-    if (g.serial2_protocol == SERIAL2_FRSKY_DPORT || 
-        g.serial2_protocol == SERIAL2_FRSKY_SPORT) {
-        frsky_telemetry.init(hal.uartD, g.serial2_protocol);
-    } else {
-        gcs[2].setup_uart(hal.uartD, map_baudrate(g.serial2_baud), 128, 128);
-    }
-#endif
+//#if CONFIG_HAL_BOARD != HAL_BOARD_APM2 && CONFIG_HAL_BOARD != HAL_BOARD_YUNEEC
+//    // we have a 2nd serial port for telemetry on all boards except
+//    // APM2. We actually do have one on APM2 but it isn't necessary as
+//    // a MUX is used
+//    gcs[1].setup_uart(hal.uartC, map_baudrate(g.serial1_baud), 128, 128);
+//#endif
+//
+//#if MAVLINK_COMM_NUM_BUFFERS > 2
+//    if (g.serial2_protocol == SERIAL2_FRSKY_DPORT ||
+//        g.serial2_protocol == SERIAL2_FRSKY_SPORT) {
+//        frsky_telemetry.init(hal.uartD, g.serial2_protocol);
+//    } else {
+//        gcs[2].setup_uart(hal.uartD, map_baudrate(g.serial2_baud), 128, 128);
+//    }
+//#endif
 
     // identify ourselves correctly with the ground station
     mavlink_system.sysid = g.sysid_this_mav;
     mavlink_system.type = 2; //MAV_QUADROTOR;
 
-#if LOGGING_ENABLED == ENABLED
-    DataFlash.Init(log_structure, sizeof(log_structure)/sizeof(log_structure[0]));
-    if (!DataFlash.CardInserted()) {
-        gcs_send_text_P(SEVERITY_HIGH, PSTR("No dataflash inserted"));
-        g.log_bitmask.set(0);
-    } else if (DataFlash.NeedErase()) {
-        gcs_send_text_P(SEVERITY_HIGH, PSTR("ERASING LOGS"));
-        do_erase_logs();
-        gcs[0].reset_cli_timeout();
-    }
-#endif
+//#if LOGGING_ENABLED == ENABLED
+//    DataFlash.Init(log_structure, sizeof(log_structure)/sizeof(log_structure[0]));
+//    if (!DataFlash.CardInserted()) {
+//        gcs_send_text_P(SEVERITY_HIGH, PSTR("No dataflash inserted"));
+//        g.log_bitmask.set(0);
+//    } else if (DataFlash.NeedErase()) {
+//        gcs_send_text_P(SEVERITY_HIGH, PSTR("ERASING LOGS"));
+//        do_erase_logs();
+//        gcs[0].reset_cli_timeout();
+//    }
+//#endif
 
     init_rc_in();               // sets up rc channels from radio
     init_rc_out();              // sets up motors and output to escs
 
     // initialise which outputs Servo and Relay events can use
-    ServoRelayEvents.set_channel_mask(~motors.get_motor_mask());
+//    ServoRelayEvents.set_channel_mask(~motors.get_motor_mask());
 
-    relay.init();
+//    relay.init();
 
     /*
      *  setup the 'main loop is dead' check. Note that this relies on
@@ -206,10 +206,10 @@ static void init_ardupilot()
      */
     hal.scheduler->register_timer_failsafe(failsafe_check, 1000);
 
- #if CONFIG_ADC == ENABLED
-    // begin filtering the ADC Gyros
-    apm1_adc.Init();           // APM ADC library initialization
- #endif // CONFIG_ADC
+// #if CONFIG_ADC == ENABLED
+//    // begin filtering the ADC Gyros
+//    apm1_adc.Init();           // APM ADC library initialization
+// #endif // CONFIG_ADC
 
     // Do GPS init
     gps.init(&DataFlash);
@@ -222,45 +222,45 @@ static void init_ardupilot()
     pos_control.set_dt(MAIN_LOOP_SECONDS);
 
     // init the optical flow sensor
-    if(g.optflow_enabled) {
-        init_optflow();
-    }
+//    if(g.optflow_enabled) {
+//        init_optflow();
+//    }
 
     // initialise inertial nav
     inertial_nav.init();
 
-#ifdef USERHOOK_INIT
-    USERHOOK_INIT
-#endif
+//#ifdef USERHOOK_INIT
+//    USERHOOK_INIT
+//#endif
 
-#if CLI_ENABLED == ENABLED
-    const prog_char_t *msg = PSTR("\nPress ENTER 3 times to start interactive setup\n");
-    cliSerial->println_P(msg);
-    if (gcs[1].initialised) {
-        hal.uartC->println_P(msg);
-    }
-    if (num_gcs > 2 && gcs[2].initialised) {
-        hal.uartD->println_P(msg);
-    }
-#endif // CLI_ENABLED
+//#if CLI_ENABLED == ENABLED
+//    const prog_char_t *msg = PSTR("\nPress ENTER 3 times to start interactive setup\n");
+//    cliSerial->println_P(msg);
+//    if (gcs[1].initialised) {
+//        hal.uartC->println_P(msg);
+//    }
+//    if (num_gcs > 2 && gcs[2].initialised) {
+//        hal.uartD->println_P(msg);
+//    }
+//#endif // CLI_ENABLED
 
-#if HIL_MODE != HIL_MODE_DISABLED
-    while (barometer.get_last_update() == 0) {
-        // the barometer begins updating when we get the first
-        // HIL_STATE message
-        gcs_send_text_P(SEVERITY_LOW, PSTR("Waiting for first HIL_STATE message"));
-        delay(1000);
-    }
-#endif
+//#if HIL_MODE != HIL_MODE_DISABLED
+//    while (barometer.get_last_update() == 0) {
+//        // the barometer begins updating when we get the first
+//        // HIL_STATE message
+//        gcs_send_text_P(SEVERITY_LOW, PSTR("Waiting for first HIL_STATE message"));
+//        delay(1000);
+//    }
+//#endif
 
     // read Baro pressure at ground
     //-----------------------------
     init_barometer(true);
 
     // initialise sonar
-#if CONFIG_SONAR == ENABLED
-    init_sonar();
-#endif
+//#if CONFIG_SONAR == ENABLED
+//    init_sonar();
+//#endif
 
     // initialise mission library
     mission.init();
@@ -270,20 +270,20 @@ static void init_ardupilot()
     reset_control_switch();
     init_aux_switches();
 
-#if FRAME_CONFIG == HELI_FRAME
-    // trad heli specific initialisation
-    heli_init();
-#endif
+//#if FRAME_CONFIG == HELI_FRAME
+//    // trad heli specific initialisation
+//    heli_init();
+//#endif
 
     startup_ground(true);
 
-#if LOGGING_ENABLED == ENABLED
-    Log_Write_Startup();
-  #ifdef LOG_FROM_STARTUP
-    // start dataflash
-    start_logging();
-  #endif
-#endif
+//#if LOGGING_ENABLED == ENABLED
+//    Log_Write_Startup();
+//  #ifdef LOG_FROM_STARTUP
+//    // start dataflash
+//    start_logging();
+//  #endif
+//#endif
 
     // we don't want writes to the serial port to cause us to pause
     // mid-flight, so set the serial ports non-blocking once we are
@@ -291,9 +291,9 @@ static void init_ardupilot()
     hal.uartA->set_blocking_writes(false);
     hal.uartB->set_blocking_writes(false);
     hal.uartC->set_blocking_writes(false);
-    if (hal.uartD != NULL) {
-        hal.uartD->set_blocking_writes(false);
-    }
+//    if (hal.uartD != NULL) {
+//        hal.uartD->set_blocking_writes(false);
+//    }
 
     cliSerial->print_P(PSTR("\nReady to FLY "));
 

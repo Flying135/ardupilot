@@ -122,17 +122,17 @@ static void read_battery(void)
 
 // read the receiver RSSI as an 8 bit number for MAVLink
 // RC_CHANNELS_SCALED message
-void read_receiver_rssi(void)
-{
-    // avoid divide by zero
-    if (g.rssi_range <= 0) {
-        receiver_rssi = 0;
-    }else{
-        rssi_analog_source->set_pin(g.rssi_pin);
-        float ret = rssi_analog_source->voltage_average() * 255 / g.rssi_range;
-        receiver_rssi = constrain_int16(ret, 0, 255);
-    }
-}
+//void read_receiver_rssi(void)
+//{
+//    // avoid divide by zero
+//    if (g.rssi_range <= 0) {
+//        receiver_rssi = 0;
+//    }else{
+//        rssi_analog_source->set_pin(g.rssi_pin);
+//        float ret = rssi_analog_source->voltage_average() * 255 / g.rssi_range;
+//        receiver_rssi = constrain_int16(ret, 0, 255);
+//    }
+//}
 
 #if EPM_ENABLED == ENABLED
 // epm update - moves epm pwm output back to neutral after grab or release is completed

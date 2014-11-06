@@ -8,7 +8,7 @@
 #include <stm32f37x_dma.h>
 
 #define YUNEEC_INPUT_MAX_CHANNELS 		16
-#define YUNEEC_VCC_ANALOG_IN_PIN 		PC5
+#define YUNEEC_VCC_ANALOG_IN_PIN 		PA0
 
 typedef void (*voidFuncPtr)(void);
 

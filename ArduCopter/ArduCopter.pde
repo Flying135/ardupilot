@@ -230,7 +230,7 @@ static DataFlash_Empty DataFlash;
 ////////////////////////////////////////////////////////////////////////////////
 // the rate we run the main loop at
 ////////////////////////////////////////////////////////////////////////////////
-#if MAIN_LOOP_RATE == 400
+#if (MAIN_LOOP_RATE == 400) || (MAIN_LOOP_RATE == 200)
 static const AP_InertialSensor::Sample_rate ins_sample_rate = AP_InertialSensor::RATE_400HZ;
 #else
 static const AP_InertialSensor::Sample_rate ins_sample_rate = AP_InertialSensor::RATE_100HZ;
@@ -693,7 +693,7 @@ static AP_ServoRelayEvents ServoRelayEvents(relay);
 #endif
 
 // a pin for reading the receiver RSSI voltage.
-static AP_HAL::AnalogSource* rssi_analog_source;
+//static AP_HAL::AnalogSource* rssi_analog_source;
 
 #if CLI_ENABLED == ENABLED
     static int8_t   setup_show (uint8_t argc, const Menu::arg *argv);
@@ -845,6 +845,80 @@ static const AP_Scheduler::Task scheduler_tasks[] PROGMEM = {
 #ifdef USERHOOK_SUPERSLOWLOOP
     { userhook_SuperSlowLoop,400,   10 },
 #endif
+};
+
+#elif  MAIN_LOOP_RATE == 200
+/*
+  scheduler table for fast CPUs - all regular tasks apart from the fast_loop()
+  should be listed here, along with how often they should be called
+  (in 5.0ms units) and the maximum time they are expected to take (in
+  microseconds)
+  1    = 200hz
+  2    = 100hz
+  4    = 50hz
+  8    = 25hz
+  10   = 20hz
+  40   = 5hz
+  67   = 3hz
+  200  = 1hz
+  400  = 0.5hz
+  2000 = 0.1hz
+
+ */
+static const AP_Scheduler::Task scheduler_tasks[] PROGMEM = {
+    { rc_loop,               2,     20 },
+    { throttle_loop,         4,     90 },
+    { update_GPS,            4,    180 },
+    { update_batt_compass,  20,    142 },
+    { read_aux_switches,    20,     10 },
+    { arm_motors_check,     20,      2 },
+    { auto_trim,            20,     28 },
+    { update_altitude,      20,    200 },
+    { run_nav_updates,      20,    160 },
+    { update_thr_cruise,    20,     40 },
+    { three_hz_loop,        66,     18 },
+    { compass_accumulate,    4,     84 },
+    { barometer_accumulate,  4,     50 },
+//#if FRAME_CONFIG == HELI_FRAME
+//    { check_dynamic_flight,  4,     20 },
+//#endif
+    { update_notify,         4,     20 },
+    { one_hz_loop,         200,     84 },
+//    { ekf_check,            40,      2 },
+    { crash_check,          20,      4 },
+    { gcs_check_input,	     4,    600 },
+    { gcs_send_heartbeat,  200,    400 },
+    { gcs_send_deferred,     4,    800 },
+    { gcs_data_stream_send,  4,   1000 },
+//#if COPTER_LEDS == ENABLED
+//    { update_copter_leds,   20,      5 },
+//#endif
+//    { update_mount,          4,     90 },
+//    { ten_hz_logging_loop,  20,     60 },
+//    { fifty_hz_logging_loop, 4,     44 },
+//    { perf_update,        2000,     40 },
+//    { read_receiver_rssi,   20,     10 },
+//#if FRSKY_TELEM_ENABLED == ENABLED
+//    { telemetry_send,       40,     10 },
+//#endif
+//#if EPM_ENABLED == ENABLED
+//    { epm_update,           20,     20 },
+//#endif
+//#ifdef USERHOOK_FASTLOOP
+//    { userhook_FastLoop,     2,     20 },
+//#endif
+//#ifdef USERHOOK_50HZLOOP
+//    { userhook_50Hz,         4,     20 },
+//#endif
+//#ifdef USERHOOK_MEDIUMLOOP
+//    { userhook_MediumLoop,  20,     20 },
+//#endif
+//#ifdef USERHOOK_SLOWLOOP
+//    { userhook_SlowLoop,    60,    20 },
+//#endif
+//#ifdef USERHOOK_SUPERSLOWLOOP
+//    { userhook_SuperSlowLoop,200,   20 },
+//#endif
 };
 #else
 /*
@@ -1110,21 +1184,21 @@ static void update_batt_compass(void)
 
 // ten_hz_logging_loop
 // should be run at 10hz
-static void ten_hz_logging_loop()
-{
-    if (g.log_bitmask & MASK_LOG_ATTITUDE_MED) {
-        Log_Write_Attitude();
-    }
-    if (g.log_bitmask & MASK_LOG_RCIN) {
-        DataFlash.Log_Write_RCIN();
-    }
-    if (g.log_bitmask & MASK_LOG_RCOUT) {
-        DataFlash.Log_Write_RCOUT();
-    }
-    if ((g.log_bitmask & MASK_LOG_NTUN) && (mode_requires_GPS(control_mode) || landing_with_GPS())) {
-        Log_Write_Nav_Tuning();
-    }
-}
+//static void ten_hz_logging_loop()
+//{
+//    if (g.log_bitmask & MASK_LOG_ATTITUDE_MED) {
+//        Log_Write_Attitude();
+//    }
+//    if (g.log_bitmask & MASK_LOG_RCIN) {
+//        DataFlash.Log_Write_RCIN();
+//    }
+//    if (g.log_bitmask & MASK_LOG_RCOUT) {
+//        DataFlash.Log_Write_RCOUT();
+//    }
+//    if ((g.log_bitmask & MASK_LOG_NTUN) && (mode_requires_GPS(control_mode) || landing_with_GPS())) {
+//        Log_Write_Nav_Tuning();
+//    }
+//}
 
 // fifty_hz_logging_loop
 // should be run at 50hz
@@ -1140,9 +1214,9 @@ static void fifty_hz_logging_loop()
         Log_Write_Attitude();
     }
 
-    if (g.log_bitmask & MASK_LOG_IMU) {
-        DataFlash.Log_Write_IMU(ins);
-    }
+//    if (g.log_bitmask & MASK_LOG_IMU) {
+//        DataFlash.Log_Write_IMU(ins);
+//    }
 #endif
 }
 
@@ -1175,9 +1249,9 @@ static void one_hz_loop()
     }
 
     // log battery info to the dataflash
-    if (g.log_bitmask & MASK_LOG_CURRENT) {
-        Log_Write_Current();
-    }
+//    if (g.log_bitmask & MASK_LOG_CURRENT) {
+//        Log_Write_Current();
+//    }
 
     // perform pre-arm checks & display failures every 30 seconds
     static uint8_t pre_arm_display_counter = 15;
@@ -1258,9 +1332,9 @@ static void update_GPS(void)
             last_gps_reading[i] = gps.last_message_time_ms(i);
 
             // log GPS message
-            if (g.log_bitmask & MASK_LOG_GPS) {
-                DataFlash.Log_Write_GPS(gps, i, current_loc.alt);
-            }
+//            if (g.log_bitmask & MASK_LOG_GPS) {
+//                DataFlash.Log_Write_GPS(gps, i, current_loc.alt);
+//            }
 
             gps_updated = true;
         }
@@ -1344,9 +1418,9 @@ init_simple_bearing()
     super_simple_sin_yaw = simple_sin_yaw;
 
     // log the simple bearing to dataflash
-    if (g.log_bitmask != 0) {
-        Log_Write_Data(DATA_INIT_SIMPLE_BEARING, ahrs.yaw_sensor);
-    }
+//    if (g.log_bitmask != 0) {
+//        Log_Write_Data(DATA_INIT_SIMPLE_BEARING, ahrs.yaw_sensor);
+//    }
 }
 
 // update_simple_mode - rotates pilot input if we are in simple mode
@@ -1414,9 +1488,9 @@ static void update_altitude()
     sonar_alt           = read_sonar();
 
     // write altitude info to dataflash logs
-    if (g.log_bitmask & MASK_LOG_CTUN) {
-        Log_Write_Control_Tuning();
-    }
+//    if (g.log_bitmask & MASK_LOG_CTUN) {
+//        Log_Write_Control_Tuning();
+//    }
 }
 
 static void tuning(){

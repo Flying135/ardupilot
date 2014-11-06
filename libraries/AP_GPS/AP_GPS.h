@@ -43,6 +43,17 @@
 #define GPS_RTK_AVAILABLE 0
 #endif
 
+// only support uBlox
+#if CONFIG_HAL_BOARD == HAL_BOARD_YUNEEC
+#undef GPS_MAX_INSTANCES
+#undef GPS_RTK_AVAILABLE
+#define GPS_MAX_INSTANCES 1
+#define GPS_RTK_AVAILABLE 0
+#define GPS_MTK19_AVAILABLE 0
+#define GPS_MTK_AVAILABLE 0
+#define GPS_SKIP_SIRF_NMEA
+#endif
+
 /**
  * save flash by skipping NMEA and SIRF support on ArduCopter on APM1/2 or any frame type on AVR1280 CPUs
  */

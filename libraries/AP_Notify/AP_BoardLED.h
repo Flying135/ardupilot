@@ -67,9 +67,10 @@
  # define HAL_GPIO_LED_ON           HIGH
  # define HAL_GPIO_LED_OFF          LOW
 #elif CONFIG_HAL_BOARD == HAL_BOARD_YUNEEC
- # define HAL_GPIO_A_LED_PIN        45
- # define HAL_GPIO_B_LED_PIN        46
- # define HAL_GPIO_C_LED_PIN        -1
+#include <utility/pinmap_typedef.h>
+ # define HAL_GPIO_A_LED_PIN        PB0
+ # define HAL_GPIO_B_LED_PIN        PE8
+ # define HAL_GPIO_C_LED_PIN        PE9
  # define HAL_GPIO_LED_ON           LOW
  # define HAL_GPIO_LED_OFF          HIGH
 #else

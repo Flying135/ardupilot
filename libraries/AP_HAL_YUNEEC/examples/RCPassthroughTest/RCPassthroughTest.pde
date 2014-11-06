@@ -1,6 +1,7 @@
 
 #include <AP_Common.h>
 #include <AP_Math.h>
+#include <StorageManager.h>
 #include <AP_Param.h>
 #include <AP_Progmem.h>
 
@@ -10,6 +11,9 @@
 #include <utility/pinmap_typedef.h>
 
 const AP_HAL::HAL& hal = AP_HAL_BOARD_DRIVER;
+AP_HAL::DigitalSource *green_led;
+AP_HAL::DigitalSource *red_led;
+AP_HAL::DigitalSource *blue_led;
 
 void multiread(AP_HAL::RCInput* in, uint16_t* channels) {
     /* Multi-channel read method: */
@@ -47,11 +51,32 @@ void individualwrite(AP_HAL::RCOutput* out, uint16_t* channels) {
     }
 }
 
-static uint16_t channels[6] = {0};
+static uint16_t channels[8] = {0};
 
 void loop (void) {
     static int ctr = 0;
-    hal.gpio->write(PC13, 0);
+    static uint8_t status = 0;
+
+    switch (status) {
+    case 0:
+        green_led->write(0);
+        red_led->write(1);
+        blue_led->write(1);
+        status = 1;
+        break;
+    case 1:
+        green_led->write(1);
+        red_led->write(0);
+        blue_led->write(1);
+        status = 2;
+        break;
+    case 2:
+        green_led->write(1);
+        red_led->write(1);
+        blue_led->write(0);
+        status = 0;
+        break;
+    }
 
     /* Cycle between using the individual read method
      * and the multi read method*/
@@ -71,15 +96,31 @@ void loop (void) {
         individualwrite(hal.rcout, channels);
     }
 
-    hal.gpio->write(PC13, 1);
-    hal.scheduler->delay(4);
+    hal.scheduler->delay(50);
     ctr++;
 }
 
 void setup (void) {
 //    hal.scheduler->delay(5000);
-    hal.gpio->pinMode(PC13, HAL_GPIO_OUTPUT);
-    hal.gpio->write(PC13, 1);
+    green_led = hal.gpio->channel(PE9);
+    red_led = hal.gpio->channel(PE8);
+    blue_led = hal.gpio->channel(PB0);
+
+    green_led->mode(HAL_GPIO_OUTPUT);
+    red_led->mode(HAL_GPIO_OUTPUT);
+    blue_led->mode(HAL_GPIO_OUTPUT);
+
+    green_led->write(0);
+    red_led->write(0);
+    blue_led->write(0);
+
+    for (int i = 0; i < 4; i++) {
+        green_led->toggle();
+        red_led->toggle();
+        blue_led->toggle();
+        hal.scheduler->delay(250);
+    }
+
     for (uint8_t i=0; i<6; i++) {
         hal.rcout->enable_ch(i);
     }
@@ -93,7 +134,7 @@ void setup (void) {
                 i, hal.rcout->get_freq(i));
     }
     /* Delay to let the user see the above printouts on the terminal */
-    hal.scheduler->delay(3000);
+    hal.scheduler->delay(1000);
 }
 
 AP_HAL_MAIN();

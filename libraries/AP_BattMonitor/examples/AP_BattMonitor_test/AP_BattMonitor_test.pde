@@ -5,6 +5,7 @@
 
 #include <AP_Common.h>
 #include <AP_Progmem.h>
+#include <StorageManager.h>
 #include <AP_Param.h>
 #include <AP_Math.h>                // ArduPilot Mega Vector/Matrix math Library
 #include <AP_ADC.h>                 // ArduPilot Mega Analog to Digital Converter Library
@@ -42,7 +43,7 @@ void setup() {
 
     // initialise the battery monitor
     battery_mon.init();
-    battery_mon.set_monitoring(AP_BATT_MONITOR_VOLTAGE_AND_CURRENT);
+    battery_mon.set_monitoring(AP_BATT_MONITOR_VOLTAGE_ONLY);
 
     hal.scheduler->delay(1000);
     timer = hal.scheduler->millis();
@@ -68,10 +69,8 @@ void loop()
     // display output at 1hz
     if (counter >= 10) {
         counter = 0;
-        hal.console->printf("\nVoltage: %.2f \tCurrent: %.2f \tTotCurr:%.2f",
-			    battery_mon.voltage(),
-			    battery_mon.current_amps(),
-                battery_mon.current_total_mah());
+        hal.console->printf("\nVoltage: %.2f \r\n",
+			    battery_mon.voltage());
     }
 
     // delay 1ms

@@ -146,6 +146,8 @@ uint8_t YUNEECRCInputPPM::read(uint16_t* periods, uint8_t len) {
             periods[i] = _override[i];
         }
     }
+
+    _new_input = false;
     return _valid_channels;
 }
 

@@ -12,12 +12,20 @@ using namespace YUNEEC;
 
 extern const AP_HAL::HAL& hal;
 
-#define DSM_BIND_TIME			200 //ms
+#define DSM_BIND_TIME_DELAY			1000 //ms
 
-#define PINPOS					(uint32_t)(DSM_UART_RX_BIT << 1)
-#define DSM_GPIO_MODE_OUT		(uint32_t)(GPIO_Mode_OUT << PINPOS)
-#define DSM_GPIO_MODE_AF		(uint32_t)(GPIO_Mode_AF << PINPOS)
-#define DSM_GPIO_MODER 			(uint32_t)(GPIO_MODER_MODER0 << PINPOS)
+/* define range mapping here, 0-1024/2048 -> 900..2100 */
+#define DSM_RANGE_MIN 0.0f
+#define DSM_RANGE_MAX_10 1024.0f
+#define DSM_RANGE_MAX_11 2048.0f
+#define DSM_TARGET_MIN 900.0f
+#define DSM_TARGET_MAX 2100.0f
+
+/* pre-calculate the floating point stuff as far as possible at compile time */
+#define DSM_SCALE_FACTOR_10 ((DSM_TARGET_MAX - DSM_TARGET_MIN) / (DSM_RANGE_MAX_10 - DSM_RANGE_MIN))
+#define DSM_SCALE_OFFSET_10 (int)(DSM_TARGET_MIN - (DSM_SCALE_FACTOR_10 * DSM_RANGE_MIN + 0.5f))
+#define DSM_SCALE_FACTOR_11 ((DSM_TARGET_MAX - DSM_TARGET_MIN) / (DSM_RANGE_MAX_11 - DSM_RANGE_MIN))
+#define DSM_SCALE_OFFSET_11 (int)(DSM_TARGET_MIN - (DSM_SCALE_FACTOR_11 * DSM_RANGE_MIN + 0.5f))
 
 /* private variables to communicate with input capture isr */
 volatile uint8_t YUNEECRCInputDSM::_dsm_frame[DSM_FRAME_SIZE] = {0};
@@ -29,28 +37,20 @@ volatile uint16_t YUNEECRCInputDSM::_periods[DSM_RC_INPUT_CHANNELS] = {0};
 volatile uint8_t  YUNEECRCInputDSM::_valid_channels = 0;
 volatile bool YUNEECRCInputDSM::_new_input = false;
 AP_HAL::UARTDriver* YUNEECRCInputDSM::_dsm_uart = NULL;
+AP_HAL::DigitalSource* YUNEECRCInputDSM::_dsm_power_pin = NULL;
 uint8_t YUNEECRCInputDSM::_pulses = DSM_CONFIG_INT_DSMx_11MS;
 volatile uint32_t YUNEECRCInputDSM::_last_time = 0;
 
-//extern "C"
-//{
-//	static voidFuncPtr timer12_callback = NULL;
-//
-//	void TIM12_IRQHandler(void) {
-//		TIM12->SR &= ~TIM_IT_Update;
-//
-//		if(timer12_callback != NULL)
-//			timer12_callback();
-//	}
-//}
-
 void YUNEECRCInputDSM::init(void* machtnichts) {
 	/* initiate uartC for dsm */
-	_dsm_init(hal.uartC);
+	_dsm_init(hal.uartA);
+
+	/* initiate power pin and power on dsm module */
+	_dsm_power_pin = hal.gpio->channel(DSM_POWER_PIN);
+	_dsm_power_pin->mode(HAL_GPIO_OUTPUT);
+	_dsm_power_pin->write(0);
 
 	/* we check the uart ring buffer every 2ms */
-//	_timer12_config();
-//	_attachInterrupt(_dsm_input);
     hal.scheduler->register_timer_process(AP_HAL_MEMBERPROC( &YUNEECRCInputDSM::_dsm_input));
 
 	/* now bind dsm receiver with remote */
@@ -73,9 +73,11 @@ static inline uint16_t constrain_pulse(uint16_t p) {
 }
 
 uint16_t YUNEECRCInputDSM::read(uint8_t ch) {
-    if (ch >= YUNEEC_RC_INPUT_NUM_CHANNELS) return 0;
+    if (ch >= DSM_RC_INPUT_CHANNELS) return 0;
 
+    __disable_irq();
     uint16_t periods = _periods[ch];
+    __enable_irq();
 
     _new_input = false;
     uint16_t pulse = constrain_pulse(periods);
@@ -86,13 +88,15 @@ uint16_t YUNEECRCInputDSM::read(uint8_t ch) {
 
 uint8_t YUNEECRCInputDSM::read(uint16_t* periods, uint8_t len) {
     /* constrain len */
-    if (len > YUNEEC_RC_INPUT_NUM_CHANNELS)
-    	len = YUNEEC_RC_INPUT_NUM_CHANNELS;
+    if (len > DSM_RC_INPUT_CHANNELS)
+    	len = DSM_RC_INPUT_CHANNELS;
 
     /* grab channels from isr's memory in critical section */
+    __disable_irq();
     for (uint8_t i = 0; i < len; i++) {
         periods[i] = _periods[i];
     }
+    __enable_irq();
 
     /* Outside of critical section, do the math (in place) to scale and
      * constrain the pulse. */
@@ -103,6 +107,8 @@ uint8_t YUNEECRCInputDSM::read(uint16_t* periods, uint8_t len) {
             periods[i] = _override[i];
         }
     }
+
+    _new_input = false;
     return _valid_channels;
 }
 
@@ -116,7 +122,7 @@ bool YUNEECRCInputDSM::set_overrides(int16_t *overrides, uint8_t len) {
 
 bool YUNEECRCInputDSM::set_override(uint8_t channel, int16_t override) {
     if (override < 0) return false; /* -1: no change. */
-    if (channel < YUNEEC_RC_INPUT_NUM_CHANNELS) {
+    if (channel < DSM_RC_INPUT_CHANNELS) {
         _override[channel] = override;
         if (override != 0) {
             _new_input = true;
@@ -127,7 +133,7 @@ bool YUNEECRCInputDSM::set_override(uint8_t channel, int16_t override) {
 }
 
 void YUNEECRCInputDSM::clear_overrides() {
-    for (int i = 0; i < YUNEEC_RC_INPUT_NUM_CHANNELS; i++) {
+    for (int i = 0; i < DSM_RC_INPUT_CHANNELS; i++) {
         _override[i] = 0;
     }
 }
@@ -199,14 +205,20 @@ bool YUNEECRCInputDSM::_dsm_check_binded(void) {
 void YUNEECRCInputDSM::_dsm_output_pulses(void) {
 	_dsm_uart->end();
 
+	/* reset dsm */
+	_dsm_power_pin->write(1);
+	hal.scheduler->delay(50);
+	_dsm_power_pin->write(0);
+	hal.scheduler->delay(50);
+
 	/* Change gpio mode */
-	hal.gpio->pinMode(PA3, HAL_GPIO_OUTPUT);
+	hal.gpio->pinMode(DSM_UART_RX_PIN, HAL_GPIO_OUTPUT);
 	/* Pulse RX pin a number of times */
 	for (uint8_t i = 0; i < _pulses; i++) {
 		hal.scheduler->delay_microseconds(25);
-		hal.gpio->write(PA3, 0);
+		hal.gpio->write(DSM_UART_RX_PIN, 0);
 		hal.scheduler->delay_microseconds(25);
-		hal.gpio->write(PA3, 1);
+		hal.gpio->write(DSM_UART_RX_PIN, 1);
 	}
 
 	_dsm_uart->begin(115200);
@@ -226,7 +238,7 @@ void YUNEECRCInputDSM::_dsm_bind(void) {
 	/* Check if dsm receiver is already binded */
 	while (_new_input == false) {
 		uint32_t now = hal.scheduler->millis();
-		if (now - start > DSM_BIND_TIME)
+		if (now - start > DSM_BIND_TIME_DELAY)
 			break;
 		hal.scheduler->delay(1);
 	}
@@ -331,9 +343,9 @@ void YUNEECRCInputDSM::_dsm_input(void) {
 
 		/* convert 0-1024 / 0-2048 values to 900-2100 ppm encoding. */
 		if (_dsm_channel_shift == 10)
-			value = value * 1200 / 1024 + 900;
+			value = (uint16_t)(value * DSM_SCALE_FACTOR_10 + .5f) + DSM_SCALE_OFFSET_10;
 		else // if(_dsm_channel_shift == 11)
-			value = value * 1200 / 2048 + 900;
+			value = (uint16_t)(value * DSM_SCALE_FACTOR_11 + .5f) + DSM_SCALE_OFFSET_11;
 
 		/*
 		 * Store the decoded channel into the R/C input buffer, taking into
@@ -377,40 +389,5 @@ void YUNEECRCInputDSM::_dsm_input(void) {
 	_new_input = true;
 
 }
-
-//void YUNEECRCInputDSM::_timer12_config() {
-//	NVIC_InitTypeDef NVIC_InitStructure;
-//	TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
-//
-//	/* TIM12 clock enable */
-//    RCC->APB1ENR |= RCC_APB1Periph_TIM12;
-//
-//	/* Configure two bits for preemption priority */
-//	NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
-//	/* Enable the TIM3 global Interrupt */
-//	NVIC_InitStructure.NVIC_IRQChannel = TIM12_IRQn;
-//	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 2;
-//	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
-//	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
-//	NVIC_Init(&NVIC_InitStructure);
-//
-//	/* Time base configuration */
-//	TIM_TimeBaseStructure.TIM_Period = 2000 - 1; // 2ms per interrupt
-//	TIM_TimeBaseStructure.TIM_Prescaler = SystemCoreClock / 1000000 - 1; // 1 MHz
-//	TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
-//	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
-//	TIM_TimeBaseInit(TIM12, &TIM_TimeBaseStructure);
-//
-//	/* Enable the CC4 Interrupt Request */
-//    TIM12->DIER |= TIM_IT_Update;
-//
-//    /* Enable the TIM Counter */
-//    TIM12->CR1 |= TIM_CR1_CEN;
-//}
-//
-//void YUNEECRCInputDSM::_attachInterrupt(voidFuncPtr callback) {
-//	if (callback != NULL)
-//		timer12_callback = callback;
-//}
 
 #endif

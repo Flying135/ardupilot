@@ -39,6 +39,9 @@ void AP_Notify::init(bool enable_external_leds)
     externalled.init();
     buzzer.init();
 #endif
+#if CONFIG_HAL_BOARD == HAL_BOARD_YUNEEC
+    toshibaled.init();
+#endif
 }
 
 // main update function, called at 50Hz
@@ -58,5 +61,8 @@ void AP_Notify::update(void)
     toshibaled.update();
     externalled.update();
     buzzer.update();
+#endif
+#if CONFIG_HAL_BOARD == HAL_BOARD_YUNEEC
+    toshibaled.update();
 #endif
 }

@@ -14,7 +14,7 @@ extern const AP_HAL::HAL& hal;
 // 1k of EEPROM address space
 
 // This is the number of 1k EEPROM blocks we need
-const uint8_t num_eeprom_blocks = 4;
+const uint8_t num_eeprom_blocks = 2;
 
 // This is the address of the LAST 2k FLASH ROM page to be used to implement the EEPROM
 // FLASH ROM page use grows downwards from here

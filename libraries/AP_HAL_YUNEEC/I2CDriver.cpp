@@ -16,6 +16,7 @@ extern const AP_HAL::HAL& hal;
 #define I2C_CR2_PARTIAL_CLEAR_MASK			(uint32_t)(0x03FF6400)
 
 #define __I2C_GET_TXIS(device)              (device->ISR & ((uint32_t)0x00000002))
+#define __I2C_GET_TXE(device)             	(device->ISR & ((uint32_t)0x00000001))
 #define __I2C_GET_BUSY(device)              (device->ISR & ((uint32_t)0x00008000))
 #define __I2C_GET_TCR(device)               (device->ISR & ((uint32_t)0x00000080))
 #define __I2C_GET_TC(device)                (device->ISR & ((uint32_t)0x00000040))
@@ -43,13 +44,15 @@ extern const AP_HAL::HAL& hal;
 #define I2C_FAST_MODE_TIMING		0x00310309
 #define I2C_STANDARD_MODE_TIMING 	0x10420F13
 
+uint16_t YUNEECI2CDriver::_timeout = 0;
+
 YUNEECI2CDriver::YUNEECI2CDriver(I2C_TypeDef* i2c, GPIO_TypeDef* port,
 								const uint32_t i2cClk,	const uint32_t portClk,
 								const uint16_t scl_bit, const uint16_t sda_bit,
 								const uint8_t scl_pinSource, const uint8_t sda_pinSource,
 								AP_HAL::Semaphore* semaphore) :
 	_i2c_info{i2c, port, i2cClk, portClk, scl_bit, sda_bit, scl_pinSource, sda_pinSource},
-	_semaphore(semaphore), _lockup_count(0), _ignore_errors(false), _timeout(0)
+	_semaphore(semaphore), _lockup_count(0), _ignore_errors(false)
 {}
 
 void YUNEECI2CDriver::begin() {
@@ -86,7 +89,7 @@ void YUNEECI2CDriver::setHighSpeed(bool active) {
 
 uint8_t YUNEECI2CDriver::write(uint8_t addr, uint8_t len, uint8_t* data) {
 	uint32_t tmpreg = 0;
-	uint32_t start;
+	uint32_t start = 0;
 	bool isTimeout = false;
 	/*
 	* Configure slave address, nbytes, no reload and generate start
@@ -108,7 +111,7 @@ uint8_t YUNEECI2CDriver::write(uint8_t addr, uint8_t len, uint8_t* data) {
 	while (len > 0) {
 	    /* Wait until TXIS flag is set */
 		start = hal.scheduler->millis();
-		__I2C_TIMEOUT(__I2C_GET_TXIS(_i2c_info.i2c), start, _timeout, isTimeout);
+		__I2C_TIMEOUT(__I2C_GET_TXE(_i2c_info.i2c), start, _timeout, isTimeout);
 
 		_i2c_info.i2c->TXDR = *data;
 		len--;
@@ -136,7 +139,7 @@ uint8_t YUNEECI2CDriver::writeRegister(uint8_t addr, uint8_t reg, uint8_t val) {
 
 uint8_t YUNEECI2CDriver::writeRegisters(uint8_t addr, uint8_t reg, uint8_t len, uint8_t* data) {
 	uint32_t tmpreg = 0;
-	uint32_t start;
+	uint32_t start = 0;
 	bool isTimeout = false;
 	/*
 	* Configure slave address, nbytes, no reload and generate start
@@ -179,7 +182,7 @@ uint8_t YUNEECI2CDriver::writeRegisters(uint8_t addr, uint8_t reg, uint8_t len, 
 	while (len > 0) {
 		/* Wait until TXIS flag is set */
 		start = hal.scheduler->millis();
-		__I2C_TIMEOUT(__I2C_GET_TXIS(_i2c_info.i2c), start, _timeout, isTimeout);
+		__I2C_TIMEOUT(__I2C_GET_TXE(_i2c_info.i2c), start, _timeout, isTimeout);
 
 		_i2c_info.i2c->TXDR = *data;
 		len--;

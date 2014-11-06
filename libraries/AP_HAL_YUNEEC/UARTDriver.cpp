@@ -16,6 +16,7 @@
 #include <stm32f37x_misc.h>
 
 using namespace YUNEEC;
+extern const AP_HAL::HAL& hal;
 
 #define MAX_USART_PORTS 3
 
@@ -31,7 +32,8 @@ YUNEECUARTDriver::YUNEECUARTDriver(
 		_usart_info{usart, port, usartIRQn, usartClk, portClk, rx_bit, tx_bit, rx_pinSource, tx_pinSource, 57600},
 		_initialized(false),
 		_rxBuffer(&__YUNEECUARTDriver__rxBuffer[portNumber]),
-		_txBuffer(&__YUNEECUARTDriver__txBuffer[portNumber])
+		_txBuffer(&__YUNEECUARTDriver__txBuffer[portNumber]),
+		_last_tail(0)
 {}
 
 void YUNEECUARTDriver::begin(uint32_t baud, uint16_t rxSpace, uint16_t txSpace) {
@@ -231,6 +233,14 @@ size_t YUNEECUARTDriver::write(const uint8_t *buffer, size_t size)
     _usart_info.usart->CR1 |= USART_FLAG_TXE;
     return size;
 }
+
+//void YUNEECUARTDriver::multi_parse_read_start(void) {
+//	_last_tail = _rxBuffer->tail;
+//}
+//
+//void YUNEECUARTDriver::multi_parse_read_restore(void) {
+//	_rxBuffer->tail = _last_tail;
+//}
 
 //-----------------------------------------------------------------
 // USART config
