@@ -227,12 +227,12 @@ const AP_Param::GroupInfo Compass::var_info[] PROGMEM = {
     // @Values: 0:None,1:Yaw45,2:Yaw90,3:Yaw135,4:Yaw180,5:Yaw225,6:Yaw270,7:Yaw315,8:Roll180,9:Roll180Yaw45,10:Roll180Yaw90,11:Roll180Yaw135,12:Pitch180,13:Roll180Yaw225,14:Roll180Yaw270,15:Roll180Yaw315,16:Roll90,17:Roll90Yaw45,18:Roll90Yaw90,19:Roll90Yaw135,20:Roll270,21:Roll270Yaw45,22:Roll270Yaw90,23:Roll270Yaw136,24:Pitch90,25:Pitch270,26:Pitch180Yaw90,27:Pitch180Yaw270,28:Roll90Pitch90,29:Roll180Pitch90,30:Roll270Pitch90,31:Roll90Pitch180,32:Roll270Pitch180,33:Roll90Pitch270,34:Roll180Pitch270,35:Roll270Pitch270,36:Roll90Pitch180Yaw90,37:Roll90Yaw270
     AP_GROUPINFO("ORIENT2", 19, Compass, _orientation[1], ROTATION_NONE),
 
-    // @Param: EXTERNAL2
+    // @Param: EXTERN2
     // @DisplayName: Compass2 is attached via an external cable
     // @Description: Configure second compass so it is attached externally. This is auto-detected on PX4 and Pixhawk.
     // @Values: 0:Internal,1:External
     // @User: Advanced
-    AP_GROUPINFO("EXTERNAL2",20, Compass, _external[1], 0),
+    AP_GROUPINFO("EXTERN2",20, Compass, _external[1], 0),
 #endif
 
 #if COMPASS_MAX_INSTANCES > 2
@@ -249,12 +249,12 @@ const AP_Param::GroupInfo Compass::var_info[] PROGMEM = {
     // @Values: 0:None,1:Yaw45,2:Yaw90,3:Yaw135,4:Yaw180,5:Yaw225,6:Yaw270,7:Yaw315,8:Roll180,9:Roll180Yaw45,10:Roll180Yaw90,11:Roll180Yaw135,12:Pitch180,13:Roll180Yaw225,14:Roll180Yaw270,15:Roll180Yaw315,16:Roll90,17:Roll90Yaw45,18:Roll90Yaw90,19:Roll90Yaw135,20:Roll270,21:Roll270Yaw45,22:Roll270Yaw90,23:Roll270Yaw136,24:Pitch90,25:Pitch270,26:Pitch180Yaw90,27:Pitch180Yaw270,28:Roll90Pitch90,29:Roll180Pitch90,30:Roll270Pitch90,31:Roll90Pitch180,32:Roll270Pitch180,33:Roll90Pitch270,34:Roll180Pitch270,35:Roll270Pitch270,36:Roll90Pitch180Yaw90,37:Roll90Yaw270
     AP_GROUPINFO("ORIENT3", 22, Compass, _orientation[2], ROTATION_NONE),
 
-    // @Param: EXTERNAL3
+    // @Param: EXTERN3
     // @DisplayName: Compass3 is attached via an external cable
     // @Description: Configure third compass so it is attached externally. This is auto-detected on PX4 and Pixhawk.
     // @Values: 0:Internal,1:External
     // @User: Advanced
-    AP_GROUPINFO("EXTERNAL3",23, Compass, _external[2], 0),
+    AP_GROUPINFO("EXTERN3",23, Compass, _external[2], 0),
 #endif
 
     AP_GROUPEND
@@ -287,6 +287,15 @@ bool
 Compass::init()
 {
     return true;
+}
+
+void
+Compass::set_offsets(uint8_t i, const Vector3f &offsets)
+{
+    // sanity check compass instance provided
+    if (i < COMPASS_MAX_INSTANCES) {
+        _offset[i].set(offsets);
+    }
 }
 
 void
@@ -452,4 +461,25 @@ bool Compass::configured(void)
         all_configured = all_configured && configured(i);
     }
     return all_configured;
+}
+
+/*
+  apply offset and motor compensation corrections
+ */
+void Compass::apply_corrections(Vector3f &mag, uint8_t i)
+{
+    const Vector3f &offsets = _offset[i].get();
+    const Vector3f &mot = _motor_compensation[i].get();
+
+    /*
+      note that _motor_offset[] is kept even if compensation is not
+      being applied so it can be logged correctly
+     */
+    mag += offsets;
+    if(_motor_comp_type != AP_COMPASS_MOT_COMP_DISABLED && _thr_or_curr != 0.0f) {
+        _motor_offset[i] = mot * _thr_or_curr;
+        mag += _motor_offset[i];
+    } else {
+        _motor_offset[i].zero();
+    }
 }

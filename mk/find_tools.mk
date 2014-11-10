@@ -56,11 +56,11 @@ ARM_OBJDUMP :=	$(call FIND_TOOL,arm-none-eabi-objdump)
 ARM_SIZE	:=	$(call FIND_TOOL,arm-none-eabi-size)
 
 # toolchains for beagleboneblack
-BBONE_CXX     :=  arm-linux-gnueabihf-g++-4.7
-BBONE_CC      :=  arm-linux-gnueabihf-gcc-4.7
-BBONE_AS      :=  arm-linux-gnueabihf-gcc-4.7
+BBONE_CXX     :=  arm-linux-gnueabihf-g++
+BBONE_CC      :=  arm-linux-gnueabihf-gcc
+BBONE_AS      :=  arm-linux-gnueabihf-gcc
 BBONE_AR      :=  ar
-BBONE_LD      :=  arm-linux-gnueabihf-g++-4.7
+BBONE_LD      :=  arm-linux-gnueabihf-g++
 BBONE_GDB     :=  gdb
 BBONE_OBJCOPY :=  objcopy
 

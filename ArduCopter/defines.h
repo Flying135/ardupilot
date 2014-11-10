@@ -179,7 +179,8 @@ enum AutoMode {
     Auto_CircleMoveToEdge,
     Auto_Circle,
     Auto_Spline,
-    Auto_NavGuided
+    Auto_NavGuided,
+    Auto_Loiter
 };
 
 // Guided modes
@@ -255,6 +256,8 @@ enum FlipState {
 #define MASK_LOG_COMPASS                (1<<13)
 #define MASK_LOG_INAV                   (1<<14) // deprecated
 #define MASK_LOG_CAMERA                 (1<<15)
+#define MASK_LOG_WHEN_DISARMED          (1UL<<16)
+#define MASK_LOG_ANY                    0xFFFF
 
 // DATA - event logging
 #define DATA_MAVLINK_FLOAT              1
@@ -342,6 +345,7 @@ enum FlipState {
 #define ERROR_SUBSYSTEM_EKFINAV_CHECK       16
 #define ERROR_SUBSYSTEM_FAILSAFE_EKFINAV    17
 #define ERROR_SUBSYSTEM_BARO                18
+#define ERROR_SUBSYSTEM_CPU                 19
 // general error codes
 #define ERROR_CODE_ERROR_RESOLVED           0
 #define ERROR_CODE_FAILED_TO_INITIALISE     1

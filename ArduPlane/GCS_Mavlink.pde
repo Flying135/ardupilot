@@ -228,7 +228,7 @@ static NOINLINE void send_extended_status1(mavlink_channel_t chan)
     if (gps.status() >= AP_GPS::GPS_OK_FIX_3D) {
         control_sensors_health |= MAV_SYS_STATUS_SENSOR_GPS;
     }
-    if (!ins.get_gyro_health_all()) {
+    if (!ins.get_gyro_health_all() || (!g.skip_gyro_cal && !ins.gyro_calibrated_ok_all())) {
         control_sensors_health &= ~MAV_SYS_STATUS_SENSOR_3D_GYRO;
     }
     if (!ins.get_accel_health_all()) {
@@ -1106,6 +1106,33 @@ void GCS_MAVLINK::handleMessage(mavlink_message_t* msg)
                 // when packet.param1 == 3 we reboot to hold in bootloader
                 hal.scheduler->reboot(packet.param1 == 3);
                 result = MAV_RESULT_ACCEPTED;
+            }
+            break;
+
+        case MAV_CMD_DO_LAND_START:
+            result = MAV_RESULT_FAILED;
+            
+            // attempt to switch to next DO_LAND_START command in the mission
+            if (jump_to_landing_sequence()) {
+                result = MAV_RESULT_ACCEPTED;
+            } 
+            break;
+
+        case MAV_CMD_DO_GO_AROUND:
+            result = MAV_RESULT_FAILED;
+
+            //Not allowing go around at FLIGHT_LAND_FINAL stage on purpose --
+            //if plane is close to the ground a go around coudld be dangerous.
+            if (flight_stage == AP_SpdHgtControl::FLIGHT_LAND_APPROACH) {
+                //Just tell the autopilot we're done landing so it will 
+                //proceed to the next mission item.  If there is no next mission
+                //item the plane will head to home point and loiter.
+                auto_state.commanded_go_around = true;
+               
+                result = MAV_RESULT_ACCEPTED;
+                gcs_send_text_P(SEVERITY_HIGH,PSTR("Go around command accepted."));           
+            } else {
+                gcs_send_text_P(SEVERITY_HIGH,PSTR("Rejected go around command."));
             }
             break;
 

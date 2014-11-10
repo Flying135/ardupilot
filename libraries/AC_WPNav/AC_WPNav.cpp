@@ -86,10 +86,11 @@ const AP_Param::GroupInfo AC_WPNav::var_info[] PROGMEM = {
 // Note that the Vector/Matrix constructors already implicitly zero
 // their values.
 //
-AC_WPNav::AC_WPNav(const AP_InertialNav& inav, const AP_AHRS& ahrs, AC_PosControl& pos_control) :
+AC_WPNav::AC_WPNav(const AP_InertialNav& inav, const AP_AHRS& ahrs, AC_PosControl& pos_control, const AC_AttitudeControl& attitude_control) :
     _inav(inav),
     _ahrs(ahrs),
     _pos_control(pos_control),
+    _attitude_control(attitude_control),
     _loiter_last_update(0),
     _loiter_step(0),
     _pilot_accel_fwd_cms(0),
@@ -341,7 +342,7 @@ void AC_WPNav::wp_and_spline_init()
 void AC_WPNav::set_speed_xy(float speed_cms)
 {
     // range check new target speed and update position controller
-    if (_wp_speed_cms >= WPNAV_WP_SPEED_MIN) {
+    if (speed_cms >= WPNAV_WP_SPEED_MIN) {
         _wp_speed_cms = speed_cms;
         _pos_control.set_speed_xy(_wp_speed_cms);
         // flag that wp leash must be recalculated
@@ -367,7 +368,7 @@ void AC_WPNav::set_wp_destination(const Vector3f& destination)
     set_wp_origin_and_destination(origin, destination);
 }
 
-/// set_origin_and_destination - set origin and destination using lat/lon coordinates
+/// set_origin_and_destination - set origin and destination waypoints using position vectors (distance from home in cm)
 void AC_WPNav::set_wp_origin_and_destination(const Vector3f& origin, const Vector3f& destination)
 {
     // store origin and destination locations
@@ -395,7 +396,7 @@ void AC_WPNav::set_wp_origin_and_destination(const Vector3f& origin, const Vecto
         _yaw = get_bearing_cd(_origin, _destination);
     } else {
         // set target yaw to current heading.  Alternatively we could pull this from the attitude controller if we had access to it
-        _yaw = _ahrs.yaw_sensor;
+        _yaw = _attitude_control.angle_ef_targets().z;
     }
 
     // initialise intermediate point to the origin
@@ -785,7 +786,7 @@ void AC_WPNav::set_spline_origin_and_destination(const Vector3f& origin, const V
     }
 
     // initialise yaw heading to current heading
-    _yaw = _ahrs.yaw_sensor;
+    _yaw = _attitude_control.angle_ef_targets().z;
 
     // store origin and destination locations
     _origin = origin;
