@@ -95,12 +95,12 @@ extern const AP_HAL::HAL& hal;
 
 #define earthRate 0.000072921f // earth rotation rate (rad/sec)
 
-// maximum value for any element in the covariance matrix
-#define EKF_COVARIENCE_MAX 1.0e8f
-
 // when the wind estimation first starts with no airspeed sensor,
 // assume 3m/s to start
 #define STARTUP_WIND_SPEED 3.0f
+
+// initial gyro bias uncertainty (deg/sec)
+#define INIT_GYRO_BIAS_UNCERTAINTY 0.1f
 
 // Define tuning parameters
 const AP_Param::GroupInfo NavEKF::var_info[] PROGMEM = {
@@ -108,173 +108,173 @@ const AP_Param::GroupInfo NavEKF::var_info[] PROGMEM = {
     // @Param: VELNE_NOISE
     // @DisplayName: GPS horizontal velocity measurement noise (m/s)
     // @Description: This is the RMS value of noise in the North and East GPS velocity measurements. Increasing it reduces the weighting on these measurements.
-    // @Range: 0.05 - 5.0
+    // @Range: 0.05 5.0
     // @Increment: 0.05
-    // @User: advanced
+    // @User: Advanced
     AP_GROUPINFO("VELNE_NOISE",    0, NavEKF, _gpsHorizVelNoise, VELNE_NOISE_DEFAULT),
 
     // @Param: VELD_NOISE
     // @DisplayName: GPS vertical velocity measurement noise (m/s)
     // @Description: This is the RMS value of noise in the vertical GPS velocity measurement. Increasing it reduces the weighting on this measurement.
-    // @Range: 0.05 - 5.0
+    // @Range: 0.05 5.0
     // @Increment: 0.05
-    // @User: advanced
+    // @User: Advanced
     AP_GROUPINFO("VELD_NOISE",    1, NavEKF, _gpsVertVelNoise, VELD_NOISE_DEFAULT),
 
     // @Param: POSNE_NOISE
     // @DisplayName: GPS horizontal position measurement noise (m)
     // @Description: This is the RMS value of noise in the GPS horizontal position measurements. Increasing it reduces the weighting on these measurements.
-    // @Range: 0.1 - 10.0
+    // @Range: 0.1 10.0
     // @Increment: 0.1
-    // @User: advanced
+    // @User: Advanced
     AP_GROUPINFO("POSNE_NOISE",    2, NavEKF, _gpsHorizPosNoise, POSNE_NOISE_DEFAULT),
 
     // @Param: ALT_NOISE
     // @DisplayName: Altitude measurement noise (m)
     // @Description: This is the RMS value of noise in the altitude measurement. Increasing it reduces the weighting on this measurement.
-    // @Range: 0.1 - 10.0
+    // @Range: 0.1 10.0
     // @Increment: 0.1
-    // @User: advanced
+    // @User: Advanced
     AP_GROUPINFO("ALT_NOISE",    3, NavEKF, _baroAltNoise, ALT_NOISE_DEFAULT),
 
     // @Param: MAG_NOISE
     // @DisplayName: Magnetometer measurement noise (Gauss)
     // @Description: This is the RMS value of noise in magnetometer measurements. Increasing it reduces the weighting on these measurements.
-    // @Range: 0.01 - 0.5
+    // @Range: 0.01 0.5
     // @Increment: 0.01
-    // @User: advanced
+    // @User: Advanced
     AP_GROUPINFO("MAG_NOISE",    4, NavEKF, _magNoise, MAG_NOISE_DEFAULT),
 
     // @Param: EAS_NOISE
     // @DisplayName: Equivalent airspeed measurement noise (m/s)
     // @Description: This is the RMS value of noise in magnetometer measurements. Increasing it reduces the weighting on these measurements.
-    // @Range: 0.5 - 5.0
+    // @Range: 0.5 5.0
     // @Increment: 0.1
-    // @User: advanced
+    // @User: Advanced
     AP_GROUPINFO("EAS_NOISE",    5, NavEKF, _easNoise, 1.4f),
 
     // @Param: WIND_PNOISE
     // @DisplayName: Wind velocity process noise (m/s^2)
     // @Description: This noise controls the growth of wind state error estimates. Increasing it makes wind estimation faster and noisier.
-    // @Range: 0.01 - 1.0
+    // @Range: 0.01 1.0
     // @Increment: 0.1
-    // @User: advanced
+    // @User: Advanced
     AP_GROUPINFO("WIND_PNOISE",    6, NavEKF, _windVelProcessNoise, 0.1f),
 
     // @Param: WIND_PSCALE
     // @DisplayName: Height rate to wind procss noise scaler
     // @Description: Increasing this parameter increases how rapidly the wind states adapt when changing altitude, but does make wind speed estimation noiser.
-    // @Range: 0.0 - 1.0
+    // @Range: 0.0 1.0
     // @Increment: 0.1
-    // @User: advanced
+    // @User: Advanced
     AP_GROUPINFO("WIND_PSCALE",    7, NavEKF, _wndVarHgtRateScale, 0.5f),
 
     // @Param: GYRO_PNOISE
     // @DisplayName: Rate gyro noise (rad/s)
     // @Description: This noise controls the growth of estimated error due to gyro measurement errors excluding bias. Increasing it makes the flter trust the gyro measurements less and other measurements more.
-    // @Range: 0.001 - 0.05
+    // @Range: 0.001 0.05
     // @Increment: 0.001
-    // @User: advanced
+    // @User: Advanced
     AP_GROUPINFO("GYRO_PNOISE",    8, NavEKF, _gyrNoise, GYRO_PNOISE_DEFAULT),
 
     // @Param: ACC_PNOISE
     // @DisplayName: Accelerometer noise (m/s^2)
     // @Description: This noise controls the growth of estimated error due to accelerometer measurement errors excluding bias. Increasing it makes the flter trust the accelerometer measurements less and other measurements more.
-    // @Range: 0.05 - 1.0    AP_Float _gpsNEVelVarAccScale;  // scale factor applied to NE velocity measurement variance due to Vdot
+    // @Range: 0.05 1.0
     // @Increment: 0.01
-    // @User: advanced
+    // @User: Advanced
     AP_GROUPINFO("ACC_PNOISE",    9, NavEKF, _accNoise, ACC_PNOISE_DEFAULT),
 
     // @Param: GBIAS_PNOISE
     // @DisplayName: Rate gyro bias process noise (rad/s)
     // @Description: This noise controls the growth of gyro bias state error estimates. Increasing it makes rate gyro bias estimation faster and noisier.
-    // @Range: 0.0000001 - 0.00001
-    // @User: advanced
+    // @Range: 0.0000001 0.00001
+    // @User: Advanced
     AP_GROUPINFO("GBIAS_PNOISE",    10, NavEKF, _gyroBiasProcessNoise, GBIAS_PNOISE_DEFAULT),
 
     // @Param: ABIAS_PNOISE
     // @DisplayName: Accelerometer bias process noise (m/s^2)
     // @Description: This noise controls the growth of the vertical acelerometer bias state error estimate. Increasing it makes accelerometer bias estimation faster and noisier.
-    // @Range: 0.00001 - 0.001
-    // @User: advanced
+    // @Range: 0.00001 0.001
+    // @User: Advanced
     AP_GROUPINFO("ABIAS_PNOISE",    11, NavEKF, _accelBiasProcessNoise, ABIAS_PNOISE_DEFAULT),
 
     // @Param: MAGE_PNOISE
     // @DisplayName: Earth magnetic field process noise (gauss/s)
     // @Description: This noise controls the growth of earth magnetic field state error estimates. Increasing it makes earth magnetic field bias estimation faster and noisier.
-    // @Range: 0.0001 - 0.01
-    // @User: advanced
+    // @Range: 0.0001 0.01
+    // @User: Advanced
     AP_GROUPINFO("MAGE_PNOISE",    12, NavEKF, _magEarthProcessNoise, MAGE_PNOISE_DEFAULT),
 
     // @Param: MAGB_PNOISE
     // @DisplayName: Body magnetic field process noise (gauss/s)
     // @Description: This noise controls the growth of body magnetic field state error estimates. Increasing it makes compass offset estimation faster and noisier.
-    // @Range: 0.0001 - 0.01
-    // @User: advanced
+    // @Range: 0.0001 0.01
+    // @User: Advanced
     AP_GROUPINFO("MAGB_PNOISE",    13, NavEKF, _magBodyProcessNoise, MAGB_PNOISE_DEFAULT),
 
     // @Param: VEL_DELAY
     // @DisplayName: GPS velocity measurement delay (msec)
     // @Description: This is the number of msec that the GPS velocity measurements lag behind the inertial measurements.
-    // @Range: 0 - 500
+    // @Range: 0 500
     // @Increment: 10
-    // @User: advanced
+    // @User: Advanced
     AP_GROUPINFO("VEL_DELAY",    14, NavEKF, _msecVelDelay, 220),
 
     // @Param: POS_DELAY
     // @DisplayName: GPS position measurement delay (msec)
     // @Description: This is the number of msec that the GPS position measurements lag behind the inertial measurements.
-    // @Range: 0 - 500
+    // @Range: 0 500
     // @Increment: 10
-    // @User: advancedScale factor applied to horizontal position measurement variance due to manoeuvre acceleration
+    // @User: Advanced
     AP_GROUPINFO("POS_DELAY",    15, NavEKF, _msecPosDelay, 220),
 
     // @Param: GPS_TYPE
     // @DisplayName: GPS velocity mode control
     // @Description: This parameter controls use of GPS velocity measurements : 0 = use 3D velocity, 1 = use 2D velocity, 2 = use no velocity
-    // @Range: 0 - 3
+    // @Range: 0 3
     // @Increment: 1
-    // @User: advanced
+    // @User: Advanced
     AP_GROUPINFO("GPS_TYPE",    16, NavEKF, _fusionModeGPS, 0),
 
     // @Param: VEL_GATE
     // @DisplayName: GPS velocity measurement gate size
     // @Description: This parameter sets the number of standard deviations applied to the GPS velocity measurement innovation consistency check. Decreasing it makes it more likely that good measurements willbe rejected. Increasing it makes it more likely that bad measurements will be accepted.
-    // @Range: 1 - 100
+    // @Range: 1 100
     // @Increment: 1
-    // @User: advanced
+    // @User: Advanced
     AP_GROUPINFO("VEL_GATE",    17, NavEKF, _gpsVelInnovGate, VEL_GATE_DEFAULT),
 
     // @Param: POS_GATE
     // @DisplayName: GPS position measurement gate size
     // @Description: This parameter sets the number of standard deviations applied to the GPS position measurement innovation consistency check. Decreasing it makes it more likely that good measurements will be rejected. Increasing it makes it more likely that bad measurements will be accepted.
-    // @Range: 1 - 100
+    // @Range: 1 100
     // @Increment: 1
-    // @User: advanced
+    // @User: Advanced
     AP_GROUPINFO("POS_GATE",    18, NavEKF, _gpsPosInnovGate, POS_GATE_DEFAULT),
 
     // @Param: HGT_GATE
     // @DisplayName: Height measurement gate size
     // @Description: This parameter sets the number of standard deviations applied to the height measurement innovation consistency check. Decreasing it makes it more likely that good measurements will be rejected. Increasing it makes it more likely that bad measurements will be accepted.
-    // @Range: 1 - 100
+    // @Range: 1 100
     // @Increment: 1
-    // @User: advanced
+    // @User: Advanced
     AP_GROUPINFO("HGT_GATE",    19, NavEKF, _hgtInnovGate, HGT_GATE_DEFAULT),
 
     // @Param: MAG_GATE
     // @DisplayName: Magnetometer measurement gate size
     // @Description: This parameter sets the number of standard deviations applied to the magnetometer measurement innovation consistency check. Decreasing it makes it more likely that good measurements will be rejected. Increasing it makes it more likely that bad measurements will be accepted.
-    // @Range: 1 - 100
+    // @Range: 1 100
     // @Increment: 1
-    // @User: advanced
+    // @User: Advanced
     AP_GROUPINFO("MAG_GATE",    20, NavEKF, _magInnovGate, MAG_GATE_DEFAULT),
 
     // @Param: EAS_GATE
     // @DisplayName: Airspeed measurement gate size
     // @Description: This parameter sets the number of standard deviations applied to the airspeed measurement innovation consistency check. Decreasing it makes it more likely that good measurements will be rejected. Increasing it makes it more likely that bad measurements will be accepted.
-    // @Range: 1 - 100
+    // @Range: 1 100
     // @Increment: 1
-    // @User: advanced
+    // @User: Advanced
     AP_GROUPINFO("EAS_GATE",    21, NavEKF, _tasInnovGate, 10),
 
     // @Param: MAG_CAL
@@ -282,24 +282,31 @@ const AP_Param::GroupInfo NavEKF::var_info[] PROGMEM = {
     // @Description: EKF_MAG_CAL = 0 enables calibration based on flying speed and altitude and is the default setting for Plane users. EKF_MAG_CAL = 1 enables calibration based on manoeuvre level and is the default setting for Copter and Rover users. EKF_MAG_CAL = 2 prevents magnetometer calibration regardless of flight condition and is recommended if in-flight magnetometer calibration is unreliable.
     // @Values: 0:Speed and Height,1:Acceleration,2:Never
     // @Increment: 1
-    // @User: advanced
+    // @User: Advanced
     AP_GROUPINFO("MAG_CAL",    22, NavEKF, _magCal, MAG_CAL_DEFAULT),
 
     // @Param: GLITCH_ACCEL
     // @DisplayName: GPS glitch accel gate size (cm/s^2)
     // @Description: This parameter controls the maximum amount of difference in horizontal acceleration between the value predicted by the filter and the value measured by the GPS before the GPS position data is rejected. If this value is set too low, then valid GPS data will be regularly discarded, and the position accuracy will degrade. If this parameter is set too high, then large GPS glitches will cause large rapid changes in position.
-    // @Range: 100 - 500
+    // @Range: 100 500
     // @Increment: 50
-    // @User: advanced
+    // @User: Advanced
     AP_GROUPINFO("GLITCH_ACCEL",    23, NavEKF, _gpsGlitchAccelMax, GLITCH_ACCEL_DEFAULT),
 
     // @Param: GLITCH_RAD
     // @DisplayName: GPS glitch radius gate size (m)
     // @Description: This parameter controls the maximum amount of difference in horizontal position (in m) between the value predicted by the filter and the value measured by the GPS before the long term glitch protection logic is activated and an offset is applied to the GPS measurement to compensate. Position steps smaller than this value will be temporarily ignored, but will then be accepted and the filter will move to the new position. Position steps larger than this value will be ignored initially, but the filter will then apply an offset to the GPS position measurement.
-    // @Range: 10 - 50
+    // @Range: 10 50
     // @Increment: 5
-    // @User: advanced
+    // @User: Advanced
     AP_GROUPINFO("GLITCH_RAD",    24, NavEKF, _gpsGlitchRadiusMax, GLITCH_RADIUS_DEFAULT),
+
+    // @Param: FALLBACK
+    // @DisplayName: Fallback strictness
+    // @Description: This parameter controls the conditions necessary to trigger a fallback to DCM and INAV. A value of 1 will cause fallbacks to occur on loss of GPS and other conditions. A value of 0 will trust the EKF more.
+    // @Values: 0:Trust EKF more, 1:Trust DCM more
+    // @User: Advanced
+    AP_GROUPINFO("FALLBACK",    31, NavEKF, _fallback, 1),
 
     AP_GROUPEND
 };
@@ -369,13 +376,10 @@ bool NavEKF::healthy(void) const
     if (state.velocity.is_nan()) {
         return false;
     }
-    if (filterDiverged || (imuSampleTime_ms - lastDivergeTime_ms < 10000)) {
-        return false;
-    }
     // If measurements have failed innovation consistency checks for long enough to time-out
     // and force fusion then the nav solution can be conidered to be unhealthy
     // This will only be set as a transient
-    if (posTimeout || velTimeout || hgtTimeout) {
+    if (_fallback && (posTimeout || velTimeout || hgtTimeout)) {
         return false;
     }
 
@@ -593,13 +597,6 @@ void NavEKF::UpdateFilter()
     // read IMU data and convert to delta angles and velocities
     readIMUData();
 
-    // detect if filter has diverged and do a dynamic reset using the DCM solution
-    checkDivergence();
-    if (filterDiverged) {
-        InitialiseFilterDynamic();
-        return;
-    }
-
     // detect if the filter update has been delayed for too long
     if (dtIMU > 0.2f) {
         // we have stalled for too long - reset states
@@ -702,23 +699,6 @@ void NavEKF::SelectVelPosFusion()
             fusePosData = false;
         }
 
-        // check for and read new height data
-        readHgtData();
-
-        // command fusion of height data
-        if (newDataHgt)
-        {
-            // reset data arrived flag
-            newDataHgt = false;
-            // reset state updates and counter used to spread fusion updates across several frames to reduce 10Hz pulsing
-            memset(&hgtIncrStateDelta[0], 0, sizeof(hgtIncrStateDelta));
-            hgtUpdateCount = 0;
-            // enable fusion
-            fuseHgtData = true;
-        } else {
-            fuseHgtData = false;
-        }
-
     } else {
         // in static mode use synthetic position measurements set to zero
         // only fuse synthetic measurements when rate of change of velocity is less than 0.5g to reduce attitude errors due to launch acceleration
@@ -729,7 +709,23 @@ void NavEKF::SelectVelPosFusion()
             fusePosData = false;
         }
         fuseVelData = false;
+    }
+
+    // check for and read new height data
+    readHgtData();
+
+    // command fusion of height data
+    if (newDataHgt)
+    {
+        // reset data arrived flag
+        newDataHgt = false;
+        // reset state updates and counter used to spread fusion updates across several frames to reduce 10Hz pulsing
+        memset(&hgtIncrStateDelta[0], 0, sizeof(hgtIncrStateDelta));
+        hgtUpdateCount = 0;
+        // enable fusion
         fuseHgtData = true;
+    } else {
+        fuseHgtData = false;
     }
 
     // perform fusion
@@ -826,16 +822,20 @@ void NavEKF::SelectTasFusion()
 }
 
 // select fusion of synthetic sideslip measurements
+// synthetic sidelip fusion only works for fixed wing aircraft and relies on the average sideslip being close to zero
+// it requires a stable wind for best results and should not be used for aerobatic flight with manoeuvres that induce large sidslip angles (eg knife-edge, spins, etc)
 void NavEKF::SelectBetaFusion()
 {
-    // Determine if synthetic sidelsip data should be fused
-    // synthetic sidelip fusion only works for fixed wing aircraft and relies on the average sideslip being close to zero
-    // it requires a stable wind estimate for best results and should not be used for aerobatic flight
-    // we fuse synthetic sideslip measurements if:
-    // we are a fly forward vehicle type AND NOT using a full range of sensors with healthy position
-    // AND NOT on the ground AND enough time has lapsed since our last fusion
-    // AND (we have not fused magnetometer data on this time step OR the immediate fusion flag is set)
-    if (assume_zero_sideslip() && !(use_compass() && useAirspeed() && posHealth) && !inhibitWindStates  && ((imuSampleTime_ms - BETAmsecPrev) >= _msecBetaAvg) && (!magFusePerformed || fuseMeNow)) {
+    // set to true if fusion is locked out due to magnetometer fusion on the same time step (done for load levelling)
+    bool f_lockedOut = (magFusePerformed && !fuseMeNow);
+    // set true when the fusion time interval has triggered
+    bool f_timeTrigger = ((imuSampleTime_ms - BETAmsecPrev) >= _msecBetaAvg);
+    // set true when use of synthetic sideslip fusion is necessary because we have limited sensor data or are dead reckoning position
+    bool f_required = !(use_compass() && useAirspeed() && posHealth);
+    // set true when sideslip fusion is feasible (requires zero sideslip assumption to be valid and use of wind states)
+    bool f_feasible = (assume_zero_sideslip() && !inhibitWindStates);
+    // use synthetic sideslip fusion if feasible, required, enough time has lapsed since the last fusion and it is not locked out
+    if (f_feasible && f_required && f_timeTrigger && !f_lockedOut) {
         FuseSideslip();
         BETAmsecPrev = imuSampleTime_ms;
     }
@@ -863,12 +863,12 @@ void NavEKF::UpdateStrapdownEquationsNED()
     // use weighted average of both IMU units for delta velocities
     correctedDelVel12 = correctedDelVel1 * IMU1_weighting + correctedDelVel2 * (1.0f - IMU1_weighting);
 
-    // save current measurements
-    prevDelAng = correctedDelAng;
-
     // apply corrections for earths rotation rate and coning errors
     // % * - and + operators have been overloaded
     correctedDelAng   = correctedDelAng - prevTnb * earthRateNED*dtIMU + (prevDelAng % correctedDelAng) * 8.333333e-2f;
+
+    // save current measurements
+    prevDelAng = correctedDelAng;
 
     // convert the rotation vector to its equivalent quaternion
     rotationMag = correctedDelAng.length();
@@ -2786,7 +2786,7 @@ void NavEKF::quat2Tbn(Matrix3f &Tbn, const Quaternion &quat) const
 // return the Euler roll, pitch and yaw angle in radians
 void NavEKF::getEulerAngles(Vector3f &euler) const
 {
-    state.quat.to_euler(&euler.x, &euler.y, &euler.z);
+    state.quat.to_euler(euler.x, euler.y, euler.z);
     euler = euler - _ahrs->get_trim();
 }
 
@@ -2814,16 +2814,32 @@ void NavEKF::getGyroBias(Vector3f &gyroBias) const
     gyroBias = state.gyro_bias / dtIMU;
 }
 
-// return weighting of first IMU in blending function and the individual Z-accel bias estimates in m/s^2
-void NavEKF::getAccelBias(Vector3f &accelBias) const
+// reset the body axis gyro bias states to zero and re-initialise the corresponding covariances
+void NavEKF::resetGyroBias(void)
 {
-    accelBias.x = IMU1_weighting;
+    state.gyro_bias.zero();
+    zeroRows(P,10,12);
+    zeroCols(P,10,12);
+    P[10][10] = sq(radians(INIT_GYRO_BIAS_UNCERTAINTY * dtIMU));
+    P[11][11] = P[10][10];
+    P[12][12] = P[10][10];
+
+}
+
+// return weighting of first IMU in blending function
+void NavEKF::getIMU1Weighting(float &ret) const
+{
+    ret = IMU1_weighting;
+}
+
+// return the individual Z-accel bias estimates in m/s^2
+void NavEKF::getAccelZBias(float &zbias1, float &zbias2) const {
     if (dtIMU == 0) {
-        accelBias.y = 0;
-        accelBias.z = 0;
+        zbias1 = 0;
+        zbias2 = 0;
     } else {
-        accelBias.y = state.accel_zbias2 / dtIMU;
-        accelBias.z = state.accel_zbias1 / dtIMU;
+        zbias1 = state.accel_zbias1 / dtIMU;
+        zbias2 = state.accel_zbias2 / dtIMU;
     }
 }
 
@@ -2930,7 +2946,7 @@ void NavEKF::CovarianceInit()
     P[8][8]   = P[7][7];
     P[9][9]   = sq(5.0f);
     // delta angle biases
-    P[10][10] = sq(radians(0.1f * dtIMU));
+    P[10][10] = sq(radians(INIT_GYRO_BIAS_UNCERTAINTY * dtIMU));
     P[11][11] = P[10][10];
     P[12][12] = P[10][10];
     // Z delta velocity bias
@@ -2955,15 +2971,6 @@ void NavEKF::ForceSymmetry()
     {
         for (uint8_t j=0; j<=i-1; j++)
         {
-            if (fabsf(P[i][j]) > EKF_COVARIENCE_MAX ||
-                fabsf(P[j][i]) > EKF_COVARIENCE_MAX) {
-                // set the filter status as diverged and re-initialise the filter
-                filterDiverged = true;
-                faultStatus.diverged = true;
-                lastDivergeTime_ms = imuSampleTime_ms;
-                InitialiseFilterDynamic();
-                return;
-            }
             float temp = 0.5f*(P[i][j] + P[j][i]);
             P[i][j] = temp;
             P[j][i] = temp;
@@ -3251,7 +3258,7 @@ void NavEKF::alignYawGPS()
         float newYaw;
         float yawErr;
         // get quaternion from existing filter states and calculate roll, pitch and yaw angles
-        state.quat.to_euler(&roll, &pitch, &oldYaw);
+        state.quat.to_euler(roll, pitch, oldYaw);
         // calculate yaw angle from GPS velocity
         newYaw = atan2f(velNED[1],velNED[0]);
         // modify yaw angle using GPS ground course if more than 45 degrees away or if not previously aligned
@@ -3353,7 +3360,6 @@ void NavEKF::ZeroVariables()
     // initialise time stamps
     imuSampleTime_ms = hal.scheduler->millis();
     lastHealthyMagTime_ms = imuSampleTime_ms;
-    lastDivergeTime_ms = imuSampleTime_ms;
     TASmsecPrev = imuSampleTime_ms;
     BETAmsecPrev = imuSampleTime_ms;
     lastMagUpdate = imuSampleTime_ms;
@@ -3371,7 +3377,6 @@ void NavEKF::ZeroVariables()
     velTimeout = false;
     posTimeout = false;
     hgtTimeout = false;
-    filterDiverged = false;
     magTimeout = false;
     magFailed = false;
     storeIndex = 0;
@@ -3453,36 +3458,10 @@ bool NavEKF::assume_zero_sideslip(void) const
     return _ahrs->get_fly_forward() && _ahrs->get_vehicle_class() != AHRS_VEHICLE_GROUND;
 }
 
-// Check for filter divergence
-void NavEKF::checkDivergence()
-{
-    // If filter is diverging, then fail for 10 seconds
-    // delay checking to allow bias estimate to settle after reset
-    // filter divergence is detected by looking for rapid changes in gyro bias
-    Vector3f tempVec = state.gyro_bias - lastGyroBias;
-    float tempLength = tempVec.length();
-    if (tempLength != 0.0f) {
-        float temp = constrain_float((P[10][10] + P[11][11] + P[12][12]),1e-12f,1e-8f);
-        scaledDeltaGyrBiasLgth = (5e-8f / temp) * tempVec.length() / dtIMU;
-    }
-    bool divergenceDetected = (scaledDeltaGyrBiasLgth > 1.0f);
-    lastGyroBias = state.gyro_bias;
-    if (imuSampleTime_ms - lastDivergeTime_ms > 10000) {
-        if (divergenceDetected) {
-            filterDiverged = true;
-            faultStatus.diverged = true;
-            lastDivergeTime_ms = imuSampleTime_ms;
-        } else {
-            filterDiverged = false;
-        }
-    }
-
-}
-
 /*
 return the filter fault status as a bitmasked integer
- 0 = filter divergence detected via gyro bias growth
- 1 = filter divergence detected by large covariances
+ 0 = unassigned
+ 1 = unassigned
  2 = badly conditioned X magnetometer fusion
  3 = badly conditioned Y magnetometer fusion
  4 = badly conditioned Z magnetometer fusion
@@ -3491,16 +3470,13 @@ return the filter fault status as a bitmasked integer
  7 = unassigned
 return normalised delta gyro bias length used for divergence test
 */
-void  NavEKF::getFilterFaults(uint8_t &faults, float &deltaGyroBias) const
+void  NavEKF::getFilterFaults(uint8_t &faults) const
 {
-    faults = (faultStatus.diverged<<0 |
-              faultStatus.large_covarience<<1 |
-              faultStatus.bad_xmag<<2 |
+    faults = (faultStatus.bad_xmag<<2 |
               faultStatus.bad_ymag<<3 |
               faultStatus.bad_zmag<<4 |
               faultStatus.bad_airspeed<<5 |
               faultStatus.bad_sideslip<<6);
-    deltaGyroBias = scaledDeltaGyrBiasLgth;
 }
 
 
