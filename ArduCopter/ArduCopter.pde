@@ -795,11 +795,7 @@ static const AP_Scheduler::Task scheduler_tasks[] PROGMEM = {
 #endif
 //    { update_notify,         8,     10 },
     { one_hz_loop,         400,     42 },
-<<<<<<< HEAD
-//    { ekf_check,            40,      2 },
-=======
-    { ekf_dcm_check,        40,      2 },
->>>>>>> b2badee172bb9dda396473731fd17e7cc0f0da40
+//    { ekf_dcm_check,        40,      2 },
     { crash_check,          40,      2 },
     { gcs_check_input,	     8,    550 },
     { gcs_send_heartbeat,  400,    150 },
