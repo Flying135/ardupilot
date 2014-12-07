@@ -7,7 +7,6 @@
 
 class YUNEEC::YUNEECSPIDeviceDriver : public AP_HAL::SPIDeviceDriver {
 public:
-    YUNEECSPIDeviceDriver();
     void init();
     AP_HAL::Semaphore* get_semaphore();
     void transaction(const uint8_t *tx, uint8_t *rx, uint16_t len);
@@ -22,11 +21,10 @@ private:
 
 class YUNEEC::YUNEECSPIDeviceManager : public AP_HAL::SPIDeviceManager {
 public:
-    YUNEECSPIDeviceManager();
     void init(void *);
-    AP_HAL::SPIDeviceDriver* device(enum AP_HAL::SPIDevice);
+    AP_HAL::SPIDeviceDriver* device(enum AP_HAL::SPIDevice d);
 private:
-    YUNEECSPIDeviceDriver _device;
+    YUNEECSPIDeviceDriver* _dataflash;
 };
 
 #endif // __AP_HAL_YUNEEC_SPIDRIVER_H__

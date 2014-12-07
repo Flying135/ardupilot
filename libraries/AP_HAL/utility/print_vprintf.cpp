@@ -70,7 +70,7 @@
 #define FL_FLTEXP	FL_PREC
 #define	FL_FLTFIX	FL_LONG
 
-void print_vprintf (AP_HAL::Print *s, unsigned char in_progmem, const char *fmt, va_list ap)
+void print_vprintf (AP_HAL::Print *s, unsigned char in_progmem, const char *fmt, va_list* ap)
 {
         unsigned char c;        /* holds a char from the format string */
         unsigned char flags;
@@ -171,7 +171,8 @@ void print_vprintf (AP_HAL::Print *s, unsigned char in_progmem, const char *fmt,
                         flags &= ~FL_FLTUPP;
 
                 flt_oper:
-                        float value = va_arg(ap,double);
+                		float value = va_arg((*ap),double);
+
                         if (!(flags & FL_PREC))
                                 prec = 6;
                         flags &= ~(FL_FLTEXP | FL_FLTFIX);
@@ -181,6 +182,7 @@ void print_vprintf (AP_HAL::Print *s, unsigned char in_progmem, const char *fmt,
                                 flags |= FL_FLTFIX;
                         } else if (prec > 0)
                                 prec -= 1;
+
                         if ((flags & FL_FLTFIX) && fabs(value) > 9999999) {
                                 flags = (flags & ~FL_FLTFIX) | FL_FLTEXP;
                         }
@@ -337,13 +339,13 @@ void print_vprintf (AP_HAL::Print *s, unsigned char in_progmem, const char *fmt,
                         switch (c) {
 
                         case 'c':
-                                buf[0] = va_arg (ap, int);
+                                buf[0] = va_arg ((*ap), int);
                                 pnt = (char *)buf;
                                 size = 1;
                                 goto no_pgmstring;
 
                         case 's':
-                                pnt = va_arg (ap, char *);
+                                pnt = va_arg ((*ap), char *);
                                 size = strnlen (pnt, (flags & FL_PREC) ? prec : ~0);
                         no_pgmstring:
                                 flags &= ~FL_PGMSTRING;
@@ -351,7 +353,7 @@ void print_vprintf (AP_HAL::Print *s, unsigned char in_progmem, const char *fmt,
 
                         case 'S':
                         // pgmstring: // not yet used
-                                pnt = va_arg (ap, char *);
+                                pnt = va_arg ((*ap), char *);
                                 size = strnlen_P (pnt, (flags & FL_PREC) ? prec : ~0);
                                 flags |= FL_PGMSTRING;
 
@@ -375,7 +377,7 @@ void print_vprintf (AP_HAL::Print *s, unsigned char in_progmem, const char *fmt,
                  * Handle integer formats variations for d/i, u, o, p, x, X.
                  */
                 if (c == 'd' || c == 'i') {
-                        long x = (flags & FL_LONG) ? va_arg(ap,long) : va_arg(ap,int);
+                        long x = (flags & FL_LONG) ? va_arg((*ap),long) : va_arg((*ap),int);
                         flags &= ~(FL_NEGATIVE | FL_ALT);
                         if (x < 0) {
                                 x = -x;
@@ -412,8 +414,8 @@ void print_vprintf (AP_HAL::Print *s, unsigned char in_progmem, const char *fmt,
                                 base = 16 | XTOA_UPPER;
                         ultoa:
                                 c = ultoa_invert ((flags & FL_LONG)
-                                                    ? va_arg(ap, unsigned long)
-                                                    : va_arg(ap, unsigned int),
+                                                    ? va_arg((*ap), unsigned long)
+                                                    : va_arg((*ap), unsigned int),
                                                     (char *)buf, base)  -  (char *)buf;
                                 flags &= ~FL_NEGATIVE;
                                 break;

@@ -2,6 +2,7 @@
 #if CONFIG_HAL_BOARD == HAL_BOARD_YUNEEC
 
 #include "RCInput.h"
+#if RECEIVER_TYPE == PPM_RECEIVER
 
 using namespace YUNEEC;
 
@@ -211,5 +212,5 @@ void YUNEECRCInputPPM::_attachInterrupt(voidFuncPtr callback) {
 	if (callback != NULL)
 		timer3_callback = callback;
 }
-
+#endif
 #endif

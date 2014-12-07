@@ -4,11 +4,11 @@
 
 #include <AP_HAL_YUNEEC.h>
 #include <utility/pinmap_typedef.h>
-#include <stm32f37x.h>
-#include <stm32f37x_dma.h>
+#include <stm32f4xx.h>
+#include <stm32f4xx_dma.h>
 
-#define YUNEEC_INPUT_MAX_CHANNELS 		16
-#define YUNEEC_VCC_ANALOG_IN_PIN 		PC5
+#define YUNEEC_INPUT_MAX_CHANNELS 		3
+#define YUNEEC_VCC_ANALOG_IN_PIN 		PC0
 
 typedef void (*voidFuncPtr)(void);
 
@@ -43,7 +43,7 @@ private:
 //    int8_t _pin_scaling_id;
 //    static const uint8_t _num_pin_scaling;
 
-    static uint8_t _ADCChannels_Tab[YUNEEC_INPUT_MAX_CHANNELS];
+    static int _ADCChannels_Tab[YUNEEC_INPUT_MAX_CHANNELS];
     static uint8_t _num_adc_channels;
 
     volatile static uint16_t _ADCConvData_Tab[YUNEEC_INPUT_MAX_CHANNELS];
@@ -63,7 +63,7 @@ class YUNEEC::YUNEECAnalogIn : public AP_HAL::AnalogIn {
 public:
     void init(void* implspecific);
     AP_HAL::AnalogSource* channel(int16_t pin);
-    float board_voltage(void);
+    float board_voltage(void) { return 3.3f; }
     // servo rail voltage in volts, or 0 if unknown
     float servorail_voltage(void) { return 0; }
     // power supply status flags, see MAV_POWER_STATUS

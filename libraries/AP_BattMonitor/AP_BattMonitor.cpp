@@ -9,7 +9,7 @@ const AP_Param::GroupInfo AP_BattMonitor::var_info[] PROGMEM = {
     // @Description: Controls enabling monitoring of the battery's voltage and current
     // @Values: 0:Disabled,3:Voltage Only,4:Voltage and Current
     // @User: Standard
-    AP_GROUPINFO("MONITOR", 0, AP_BattMonitor, _monitoring, AP_BATT_MONITOR_DISABLED),
+    AP_GROUPINFO("MONITOR", 0, AP_BattMonitor, _monitoring, AP_BATT_MONITOR_VOLTAGE_AND_CURRENT),
 
     // @Param: VOLT_PIN
     // @DisplayName: Battery Voltage sensing pin
@@ -88,6 +88,17 @@ AP_BattMonitor::init()
 {
     _volt_pin_analog_source = hal.analogin->channel(_volt_pin);
     _curr_pin_analog_source = hal.analogin->channel(_curr_pin);
+
+#if CONFIG_HAL_BOARD == HAL_BOARD_YUNEEC
+    float amp_offset = 0;
+    for (int i = 0; i < 20; i++) {
+    	amp_offset += _curr_pin_analog_source->voltage_latest();
+    	hal.scheduler->delay(25);
+    }
+    amp_offset /= 20.0f;
+    _curr_amp_offset.set(amp_offset);
+#endif
+
     if (_volt2_pin != -1) {
         _volt2_pin_analog_source = hal.analogin->channel(_volt2_pin);
     } else {
@@ -119,7 +130,12 @@ AP_BattMonitor::read()
         float dt = tnow - _last_time_micros;
         // this copes with changing the pin at runtime
         _curr_pin_analog_source->set_pin(_curr_pin);
+#if CONFIG_HAL_BOARD == HAL_BOARD_YUNEEC
+        _current_amps = (_curr_amp_offset - _curr_pin_analog_source->voltage_average())*_curr_amp_per_volt;
+        if (_current_amps < 0) _current_amps = 0;
+#else
         _current_amps = (_curr_pin_analog_source->voltage_average()-_curr_amp_offset)*_curr_amp_per_volt;
+#endif
         if (_last_time_micros != 0 && dt < 2000000.0f) {
             // .0002778 is 1/3600 (conversion to hours)
             _current_total_mah += _current_amps * dt * 0.0000002778f;

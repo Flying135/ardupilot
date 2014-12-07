@@ -3,16 +3,23 @@
 
 #define EEPROM_USES_16BIT_WORDS
 
-#include <stm32f37x.h>
-#include <stm32f37x_flash.h>
+#include <stm32f4xx.h>
+#include <stm32f4xx_flash.h>
 
-#define EEPROM_PAGE_SIZE		(uint16_t)0x800  /* Page size = 2KByte */
+#define EEPROM_PAGE_SIZE		(uint16_t)0x4000  /* Page size = 2KByte */
 
-#define EEPROM_START_ADDRESS 	((uint32_t)0x0803F000)
+/* Device voltage range supposed to be [2.7V to 3.6V], the operation will
+   be done by word  */
+#define EEPROM_VOLTAGE_RANGE           (uint8_t)VoltageRange_3
+
+#define EEPROM_START_ADDRESS 	((uint32_t)0x08004000)
 
 /* Pages 0 and 1 base and end addresses */
 #define EEPROM_PAGE0_BASE		((uint32_t)(EEPROM_START_ADDRESS))
 #define EEPROM_PAGE1_BASE		((uint32_t)(EEPROM_START_ADDRESS + EEPROM_PAGE_SIZE))
+
+#define EEPROM_PAGE0_ID               FLASH_Sector_1
+#define EEPROM_PAGE1_ID               FLASH_Sector_2
 
 /* Page status definitions */
 #define EEPROM_ERASED			((uint16_t)0xFFFF)	/* PAGE is empty */
@@ -54,17 +61,15 @@ public:
 	uint32_t PageSize;
 	uint16_t Status;
 private:
-	FLASH_Status EE_ErasePage(uint32_t);
+	FLASH_Status EE_ErasePage(uint32_t, uint16_t);
 
 	uint16_t EE_CheckPage(uint32_t, uint16_t);
-	uint16_t EE_CheckErasePage(uint32_t, uint16_t);
+	uint16_t EE_CheckErasePage(uint32_t, uint16_t, uint16_t);
 	uint16_t EE_Format(void);
 	uint32_t EE_FindValidPage(void);
 	uint16_t EE_GetVariablesCount(uint32_t, uint16_t);
 	uint16_t EE_PageTransfer(uint32_t, uint32_t, uint16_t);
 	uint16_t EE_VerifyPageFullWriteVariable(uint16_t, uint16_t);
 };
-
-extern EEPROMClass EEPROM;
 
 #endif	/* __EEPROM_H */

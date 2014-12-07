@@ -10,10 +10,14 @@
 #include <AP_HAL.h>
 #include <AP_HAL_AVR.h>
 #include <AP_HAL_AVR_SITL.h>
-#include <AP_HAL_Empty.h>
+#include <AP_HAL_Linux.h>
+#include <AP_HAL_FLYMAPLE.h>
+#include <AP_HAL_PX4.h>
 #include <AP_HAL_YUNEEC.h>
+#include <AP_HAL_Empty.h>
 #include <AP_Math.h>
 #include <AP_Param.h>
+#include <StorageManager.h>
 #include <AP_ADC.h>
 #include <AP_InertialSensor.h>
 #include <AP_Notify.h>
@@ -23,15 +27,20 @@
 #include <DataFlash.h>
 #include <GCS_MAVLink.h>
 #include <AP_Mission.h>
+#include <StorageManager.h>
+#include <AP_Terrain.h>
 #include <AP_AHRS.h>
 #include <AP_Airspeed.h>
 #include <AP_Vehicle.h>
 #include <AP_ADC_AnalogSource.h>
 #include <AP_Compass.h>
 #include <AP_Declination.h>
+#include <AP_NavEKF.h>
+#include <AP_HAL_Linux.h>
 
 const AP_HAL::HAL& hal = AP_HAL_BOARD_DRIVER;
-AP_InertialSensor_MPU6050 ins;
+
+AP_InertialSensor ins;
 
 void setup(void)
 {
@@ -176,7 +185,7 @@ void run_test()
     while( !hal.console->available() ) {
 
         // wait until we have a sample
-        ins.wait_for_sample(1000);
+        ins.wait_for_sample();
 
         // read samples from ins
         ins.update();
@@ -187,7 +196,7 @@ void run_test()
 
 		if (counter++ % 50 == 0) {
 			// display results
-			hal.console->printf_P(PSTR("Accel X:%4.2f \t Y:%4.2f \t Z:%4.2f \t len:%4.2f \n Gyro X:%4.2f \t Y:%4.2f \t Z:%4.2f\n"),
+			hal.console->printf_P(PSTR("Accel X:%4.2f \t Y:%4.2f \t Z:%4.2f \t len:%4.2f \t Gyro X:%4.2f \t Y:%4.2f \t Z:%4.2f\n"),
 								  accel.x, accel.y, accel.z, length, gyro.x, gyro.y, gyro.z);
 		}
     }

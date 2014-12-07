@@ -56,8 +56,8 @@ public:
     void _printf_P(const prog_char *s, ...)
             __attribute__ ((format(__printf__, 2, 3)));
 
-    void vprintf(const char *s, va_list ap);
-    void vprintf_P(const prog_char *s, va_list ap);
+    void vprintf(const char *s, va_list* ap);
+    void vprintf_P(const prog_char *s, va_list* ap);
 };
 
 #endif // __AP_HAL_UART_DRIVER_H__

@@ -23,9 +23,9 @@
 
 #include <AP_HAL.h>
 #include <AP_AHRS.h>
+#include <AP_NavEKF.h>
 
 #if HAL_CPU_CLASS >= HAL_CPU_CLASS_150
-#include <AP_NavEKF.h>
 
 #define AP_AHRS_NAVEKF_AVAILABLE 1
 #define AP_AHRS_NAVEKF_SETTLE_TIME_MS 20000     // time in milliseconds the ekf needs to settle after being started

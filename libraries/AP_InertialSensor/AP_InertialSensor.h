@@ -11,7 +11,7 @@
    maximum number of INS instances available on this platform. If more
    than 1 then redundent sensors may be available
  */
-#if HAL_CPU_CLASS > HAL_CPU_CLASS_16
+#if HAL_CPU_CLASS > HAL_CPU_CLASS_16 && CONFIG_HAL_BOARD != HAL_BOARD_YUNEEC
 #define INS_MAX_INSTANCES 3
 #define INS_MAX_BACKENDS  6
 #else

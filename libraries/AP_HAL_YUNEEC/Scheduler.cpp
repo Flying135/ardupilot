@@ -52,6 +52,14 @@ uint32_t YUNEECScheduler::micros() {
 	return _timer.micros();
 }
 
+uint64_t YUNEECScheduler::millis64() {
+	return 0;
+}
+
+uint64_t YUNEECScheduler::micros64() {
+	return 0;
+}
+
 void YUNEECScheduler::delay_microseconds(uint16_t us) {
     _timer.delay_microseconds(us);
 }

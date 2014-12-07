@@ -28,7 +28,7 @@ const AP_Param::GroupInfo AP_GPS::var_info[] PROGMEM = {
     // @DisplayName: GPS type
     // @Description: GPS type
     // @Values: 0:None,1:AUTO,2:uBlox,3:MTK,4:MTK19,5:NMEA,6:SiRF,7:HIL,8:SwiftNav
-    AP_GROUPINFO("TYPE",    0, AP_GPS, _type[0], 1),
+    AP_GROUPINFO("TYPE",    0, AP_GPS, _type[0], 2),
 
 #if GPS_MAX_INSTANCES > 1
 
@@ -169,7 +169,7 @@ AP_GPS::detect_instance(uint8_t instance)
 			dstate->last_baud = 0;
 		}
 		uint32_t baudrate = pgm_read_dword(&_baudrates[dstate->last_baud]);
-		port->begin(baudrate, 256, 16);		
+		port->begin(baudrate, 256, 16);
 		dstate->last_baud_change_ms = now;
         send_blob_start(instance, _initialisation_blob, sizeof(_initialisation_blob));
     }
@@ -186,7 +186,7 @@ AP_GPS::detect_instance(uint8_t instance)
           for.
         */
         if ((_type[instance] == GPS_TYPE_AUTO || _type[instance] == GPS_TYPE_UBLOX) &&
-            pgm_read_dword(&_baudrates[dstate->last_baud]) >= 38400 && 
+            pgm_read_dword(&_baudrates[dstate->last_baud]) >= 38400 &&
             AP_GPS_UBLOX::_detect(dstate->ublox_detect_state, data)) {
             hal.console->print_P(PSTR(" ublox "));
             new_gps = new AP_GPS_UBLOX(*this, state[instance], port);
@@ -195,7 +195,7 @@ AP_GPS::detect_instance(uint8_t instance)
                  AP_GPS_MTK19::_detect(dstate->mtk19_detect_state, data)) {
 			hal.console->print_P(PSTR(" MTK19 "));
 			new_gps = new AP_GPS_MTK19(*this, state[instance], port);
-		} 
+		}
 		else if ((_type[instance] == GPS_TYPE_AUTO || _type[instance] == GPS_TYPE_MTK) &&
                  AP_GPS_MTK::_detect(dstate->mtk_detect_state, data)) {
 			hal.console->print_P(PSTR(" MTK "));

@@ -1621,7 +1621,7 @@ void gcs_send_text_fmt(const prog_char_t *fmt, ...)
     gcs[0].pending_status.severity = (uint8_t)SEVERITY_LOW;
     va_start(arg_list, fmt);
     hal.util->vsnprintf_P((char *)gcs[0].pending_status.text,
-            sizeof(gcs[0].pending_status.text), fmt, arg_list);
+            sizeof(gcs[0].pending_status.text), fmt, &arg_list);
     va_end(arg_list);
     gcs[0].send_message(MSG_STATUSTEXT);
     for (uint8_t i=1; i<num_gcs; i++) {

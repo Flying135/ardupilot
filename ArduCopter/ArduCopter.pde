@@ -147,6 +147,7 @@
 #include <AP_BattMonitor.h>     // Battery monitor library
 //#include <AP_BoardConfig.h>     // board configuration library
 #include <AP_Frsky_Telem.h>
+#include <AP_ST24_Telem.h>
 #if SPRAYER == ENABLED
 #include <AC_Sprayer.h>         // crop sprayer library
 #endif
@@ -284,6 +285,8 @@ static AP_Compass_VRBRAIN compass;
 static AP_Compass_HMC5843 compass;
 #elif CONFIG_COMPASS == HAL_COMPASS_HIL
 static AP_Compass_HIL compass;
+#elif CONFIG_COMPASS == HAL_COMPASS_YUNEEC
+static AP_Compass_YUNEEC compass;
 #else
  #error Unrecognized CONFIG_COMPASS setting
 #endif
@@ -560,6 +563,12 @@ static AP_Frsky_Telem frsky_telemetry(ahrs, battery);
 #endif
 
 ////////////////////////////////////////////////////////////////////////////////
+// ST24 telemetry support
+#if ST24_TELEM_ENABLED == ENABLED
+static AP_ST24_Telem st24_telemetry(ahrs, battery, compass);
+#endif
+
+////////////////////////////////////////////////////////////////////////////////
 // Altitude
 ////////////////////////////////////////////////////////////////////////////////
 // The cm/s we are moving up or down based on filtered data - Positive = UP
@@ -793,13 +802,9 @@ static const AP_Scheduler::Task scheduler_tasks[] PROGMEM = {
 #if FRAME_CONFIG == HELI_FRAME
     { check_dynamic_flight,  8,     10 },
 #endif
-//    { update_notify,         8,     10 },
+    { update_notify,         8,     10 },
     { one_hz_loop,         400,     42 },
-<<<<<<< HEAD
-//    { ekf_check,            40,      2 },
-=======
     { ekf_dcm_check,        40,      2 },
->>>>>>> b2badee172bb9dda396473731fd17e7cc0f0da40
     { crash_check,          40,      2 },
     { gcs_check_input,	     8,    550 },
     { gcs_send_heartbeat,  400,    150 },
@@ -813,8 +818,8 @@ static const AP_Scheduler::Task scheduler_tasks[] PROGMEM = {
     { fifty_hz_logging_loop, 8,     22 },
     { perf_update,        4000,     20 },
     { read_receiver_rssi,   40,      5 },
-#if FRSKY_TELEM_ENABLED == ENABLED
-    { telemetry_send,       80,     10 },	
+#if FRSKY_TELEM_ENABLED == ENABLED || ST24_TELEM_ENABLED == ENABLED
+    { telemetry_send,        8,     20 },
 #endif
 #if EPM_ENABLED == ENABLED
     { epm_update,           40,     10 },
@@ -884,7 +889,7 @@ static const AP_Scheduler::Task scheduler_tasks[] PROGMEM = {
     { fifty_hz_logging_loop, 2,     220 },
     { perf_update,        1000,     200 },
     { read_receiver_rssi,   10,      50 },
-#if FRSKY_TELEM_ENABLED == ENABLED
+#if FRSKY_TELEM_ENABLED == ENABLED || ST24_TELEM_ENABLED == ENABLED
     { telemetry_send,       20,     100 },	
 #endif
 #if EPM_ENABLED == ENABLED

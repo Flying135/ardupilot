@@ -31,7 +31,7 @@ uint16_t EEPROMClass::EE_CheckPage(uint32_t pageBase, uint16_t status)
   *			FLASH_COMPLETE: success erase
   *			- Flash error code: on write Flash error
   */
-FLASH_Status EEPROMClass::EE_ErasePage(uint32_t pageBase)
+FLASH_Status EEPROMClass::EE_ErasePage(uint32_t pageBase, uint16_t pageID)
 {
 	FLASH_Status FlashStatus;
 	uint16_t data = (*(__IO uint16_t*)(pageBase));
@@ -40,7 +40,7 @@ FLASH_Status EEPROMClass::EE_ErasePage(uint32_t pageBase)
 	else
 		data = 0;
 
-	FlashStatus = FLASH_ErasePage(pageBase);
+    FlashStatus = FLASH_EraseSector(pageID, EEPROM_VOLTAGE_RANGE);
 	if (FlashStatus == FLASH_COMPLETE)
 		FlashStatus = FLASH_ProgramHalfWord(pageBase + 2, data);
 
@@ -55,12 +55,12 @@ FLASH_Status EEPROMClass::EE_ErasePage(uint32_t pageBase)
   *			- EEPROM_BAD_FLASH:	page not empty after erase
   *			- EEPROM_OK:			page blank
   */
-uint16_t EEPROMClass::EE_CheckErasePage(uint32_t pageBase, uint16_t status)
+uint16_t EEPROMClass::EE_CheckErasePage(uint32_t pageBase, uint16_t pageID, uint16_t status)
 {
 	uint16_t FlashStatus;
 	if (EE_CheckPage(pageBase, status) != EEPROM_OK)
 	{
-		FlashStatus = EE_ErasePage(pageBase);
+        FlashStatus = EE_ErasePage(pageBase, pageID);
 		if (FlashStatus != FLASH_COMPLETE)
 			return FlashStatus;
 		return EE_CheckPage(pageBase, status);
@@ -136,6 +136,7 @@ uint16_t EEPROMClass::EE_PageTransfer(uint32_t newPage, uint32_t oldPage, uint16
 	uint32_t oldEnd, newEnd;
 	uint32_t oldIdx, newIdx, idx;
 	uint16_t address, data, found;
+	uint16_t pageID;
 	FLASH_Status FlashStatus;
 
 	// Transfer process: transfer variables from old to the new active page
@@ -187,7 +188,11 @@ uint16_t EEPROMClass::EE_PageTransfer(uint32_t newPage, uint32_t oldPage, uint16
 	}
 
 	// Erase the old Page: Set old Page status to EEPROM_EEPROM_ERASED status
-	data = EE_CheckErasePage(oldPage, EEPROM_ERASED);
+	if (oldPage == PageBase0)
+		pageID = EEPROM_PAGE0_ID;
+	else
+		pageID = EEPROM_PAGE1_ID;
+	data = EE_CheckErasePage(oldPage, pageID, EEPROM_ERASED);
 	if (data != EEPROM_OK)
 		return data;
 
@@ -321,14 +326,14 @@ uint16_t EEPROMClass::init(void)
 */
 	case EEPROM_ERASED:
 		if (status1 == EEPROM_VALID_PAGE)			// Page0 erased, Page1 valid
-			Status = EE_CheckErasePage(PageBase0, EEPROM_ERASED);
+			Status = EE_CheckErasePage(PageBase0, EEPROM_PAGE0_ID, EEPROM_ERASED);
 		else if (status1 == EEPROM_RECEIVE_DATA)	// Page0 erased, Page1 receive
 		{
 			FlashStatus = FLASH_ProgramHalfWord(PageBase1, EEPROM_VALID_PAGE);
 			if (FlashStatus != FLASH_COMPLETE)
 				Status = FlashStatus;
 			else
-				Status = EE_CheckErasePage(PageBase0, EEPROM_ERASED);
+				Status = EE_CheckErasePage(PageBase0, EEPROM_PAGE0_ID, EEPROM_ERASED);
 		}
 		else if (status1 == EEPROM_ERASED)			// Both in erased state so format EEPROM
 			Status = format();
@@ -345,7 +350,7 @@ uint16_t EEPROMClass::init(void)
 			Status = EE_PageTransfer(PageBase0, PageBase1, 0xFFFF);
 		else if (status1 == EEPROM_ERASED)			// Page0 receive, Page1 erased
 		{
-			Status = EE_CheckErasePage(PageBase1, EEPROM_ERASED);
+			Status = EE_CheckErasePage(PageBase1, EEPROM_PAGE1_ID, EEPROM_ERASED);
 			if (Status == EEPROM_OK)
 			{
 				FlashStatus = FLASH_ProgramHalfWord(PageBase0, EEPROM_VALID_PAGE);
@@ -369,7 +374,7 @@ uint16_t EEPROMClass::init(void)
 		else if (status1 == EEPROM_RECEIVE_DATA)
 			Status = EE_PageTransfer(PageBase1, PageBase0, 0xFFFF);
 		else
-			Status = EE_CheckErasePage(PageBase1, EEPROM_ERASED);
+			Status = EE_CheckErasePage(PageBase1, EEPROM_PAGE1_ID, EEPROM_ERASED);
 		break;
 /*
 		Page0				Page1
@@ -380,14 +385,14 @@ uint16_t EEPROMClass::init(void)
 */
 	default:
 		if (status1 == EEPROM_VALID_PAGE)
-			Status = EE_CheckErasePage(PageBase0, EEPROM_ERASED);	// Check/Erase Page0
+			Status = EE_CheckErasePage(PageBase0, EEPROM_PAGE0_ID, EEPROM_ERASED);	// Check/Erase Page0
 		else if (status1 == EEPROM_RECEIVE_DATA)
 		{
 			FlashStatus = FLASH_ProgramHalfWord(PageBase1, EEPROM_VALID_PAGE);
 			if (FlashStatus != FLASH_COMPLETE)
 				Status = FlashStatus;
 			else
-				Status = EE_CheckErasePage(PageBase0, EEPROM_ERASED);
+				Status = EE_CheckErasePage(PageBase0, EEPROM_PAGE0_ID, EEPROM_ERASED);
 		}
 		break;
 	}
@@ -407,7 +412,7 @@ uint16_t EEPROMClass::format(void)
 	FLASH_Unlock();
 
 	// Erase Page0
-	status = EE_CheckErasePage(PageBase0, EEPROM_VALID_PAGE);
+	status = EE_CheckErasePage(PageBase0, EEPROM_PAGE0_ID, EEPROM_VALID_PAGE);
 	if (status != EEPROM_OK)
 		return status;
 	if ((*(__IO uint16_t*)PageBase0) == EEPROM_ERASED)
@@ -418,7 +423,7 @@ uint16_t EEPROMClass::format(void)
 			return FlashStatus;
 	}
 	// Erase Page1
-	return EE_CheckErasePage(PageBase1, EEPROM_ERASED);
+	return EE_CheckErasePage(PageBase1, EEPROM_PAGE1_ID, EEPROM_ERASED);
 }
 
 /**
@@ -548,5 +553,4 @@ uint16_t EEPROMClass::maxcount(void)
 	return ((PageSize / 4)-1);
 }
 
-EEPROMClass EEPROM;
 #endif

@@ -300,7 +300,7 @@ bool AP_Baro_MS5611::init()
     }
 
     _serial->write(CMD_MS5611_RESET);
-    hal.scheduler->delay(4);
+    hal.scheduler->delay(8);
 
     // We read the factory calibration
     // The on-chip CRC is not used

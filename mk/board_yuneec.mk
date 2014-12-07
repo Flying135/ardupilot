@@ -5,29 +5,60 @@
 ###############################################################################
 # Specify the MCU info for libopencm3
 
+BOARD		?= FC1
 TOOLCHAIN   := ARM
+
+ifeq ($(BOARD),FCOY)
 MCU 		:= STM32F373RC
 FAMILY 		:= cortex-m4
 F_CPU 		:= 72000000L
 HSE_VALUE	:= 16000000L
 LIBNAME		:= stm32f37x
 TypeOfMCU	:= STM32F37X
+else ifeq ($(BOARD), FC1)
+#MCU 		:= STM32F405RG
+MCU 		:= STM32F407VE
+FAMILY 		:= cortex-m4
+F_CPU 		:= 168000000L
+HSE_VALUE	:= 16000000L
+LIBNAME		:= stm32f4xx
+TypeOfMCU	:= STM32F40_41xxx
+else
+$(error Unknown board type)
+endif
 
-# Put the 'libs' within the same folder with 'ardupilot'
+# Put the 'libraries' within the same folder with 'ardupilot'
+ifeq ($(BOARD), FCOY)
 LIBDIR 		= $(SKETCHBOOK)/../libraries
 STMLIBDIR	= $(LIBDIR)/STM32_USB-FS-Device_Lib_V4.0.0/Libraries
 LDSCRIPT 	= $(LIBDIR)/STM32F3_FLASH.ld
 STARTUP 	= $(LIBDIR)/startup_stm32f37x.s
+else ifeq ($(BOARD), FC1)
+LIBDIR 		= $(SKETCHBOOK)/../libraries
+STMLIBDIR	= $(LIBDIR)/STM32F4xx_DSP_StdPeriph_Lib_V1.4.0/Libraries
+LDSCRIPT 	= $(LIBDIR)/STM32F4_FLASH.ld
+STARTUP 	= $(LIBDIR)/startup_stm32f40xx.s
+BLTOOLSDIR  = $(LIBDIR)/Bootloader_Tools
+else
+$(error Unknown board type)
+endif
 
 ###############################################################################
 # Source files
-
+ifeq ($(BOARD), FCOY)
 COREINCLUDES  = -I$(STMLIBDIR)/CMSIS/Include
 COREINCLUDES += -I$(STMLIBDIR)/CMSIS/Device/ST/STM32F37x/Include
 COREINCLUDES += -I$(STMLIBDIR)/CMSIS/Device/ST/STM32F37x/Source/Templates
 COREINCLUDES += -I$(STMLIBDIR)/STM32F37x_StdPeriph_Driver/inc
 COREINCLUDES += -I$(STMLIBDIR)/STM32_USB-FS-Device_Driver/inc
-
+else ifeq ($(BOARD), FC1)
+COREINCLUDES  = -I$(STMLIBDIR)/CMSIS/Include
+COREINCLUDES += -I$(STMLIBDIR)/CMSIS/Device/ST/STM32F4xx/Include
+COREINCLUDES += -I$(STMLIBDIR)/CMSIS/Device/ST/STM32F4xx/Source/Templates
+COREINCLUDES += -I$(STMLIBDIR)/STM32F4xx_StdPeriph_Driver/inc
+else
+$(error Unknown board type)
+endif
 ###############################################################################
 # Tool options
 
@@ -36,6 +67,7 @@ include $(MK_DIR)/find_tools.mk
 DEFINES         =   -DF_CPU=$(F_CPU) -DHSE_VALUE=$(HSE_VALUE) -D$(TypeOfMCU) -DVECT_TAB_FLASH
 DEFINES        +=   -DSKETCH=\"$(SKETCH)\" -DAPM_BUILD_DIRECTORY=APM_BUILD_$(SKETCH)
 DEFINES        +=   $(EXTRAFLAGS) # from user config.mk
+DEFINES        +=   -DBOARD_$(BOARD)
 DEFINES        +=   -DCONFIG_HAL_BOARD=$(HAL_BOARD)
 WARNFLAGS       =   -Wformat -Wall -Wshadow -Wpointer-arith -Wcast-align -Wno-psabi 
 WARNFLAGS      +=   -Wwrite-strings -Wformat=2
@@ -43,10 +75,10 @@ WARNFLAGSCXX    =   -Wno-reorder -Wredundant-decls
 WARNFLAGSC      =   -Wimplicit-function-declaration  -Wmissing-prototypes -Wstrict-prototypes
 
 DEPFLAGS        =   -MD -MT $@
-DEPFLAGS		=	-include $(LIBDIR)/stm32f37x_conf.h
+DEPFLAGS		=	-include $(LIBDIR)/stm32f4xx_conf.h
 
 CXXOPTS         =   -ffunction-sections -fdata-sections -fno-exceptions -fsigned-char -fno-rtti -fno-common -Wl,--gc-sections
-COPTS           =   -ffunction-sections -fdata-sections -fsigned-char -fno-common  -Wl,--gc-sections
+COPTS           =   -ffunction-sections -fdata-sections -fsigned-char -fno-common -Wl,--gc-sections
 ASOPTS          =   -x assembler-with-cpp
 LISTOPTS        =   -adhlns=$(@:.o=.lst)
 
@@ -64,7 +96,7 @@ OPTFLAGS			= $($(TOOLCHAIN)_OPTFLAGS)
 
 CXXFLAGS       +=   $(CPUFLAGS) $(DEFINES) -Wa,$(LISTOPTS) $(OPTFLAGS) $(COREINCLUDES) -std=gnu++11
 CXXFLAGS       +=   $(WARNFLAGS) $(WARNFLAGSCXX) $(DEPFLAGS) $(CXXOPTS)
-CFLAGS         +=   $(CPUFLAGS) $(DEFINES) -Wa,$(LISTOPTS) $(OPTFLAGS) $(COREINCLUDES)
+CFLAGS         +=   $(CPUFLAGS) $(DEFINES) -Wa,$(LISTOPTS) $(OPTFLAGS) $(COREINCLUDES) -std=c99
 CFLAGS         +=   $(WARNFLAGS) $(WARNFLAGSC) $(DEPFLAGS) $(COPTS)
 ASFLAGS        +=   $(CPUFLAGS) $(DEFINES) -Wa,$(LISTOPTS)  $(COREINCLUDES)
 ASFLAGS        +=   $(ASOPTS) $(DEPFLAGS)
@@ -187,7 +219,7 @@ $(BUILDROOT)/libraries/%.o: $(SKETCHBOOK)/libraries/%.S
 
 OUTPUT_BINARY_DIRECTORY   := $(BUILDROOT)
 JLINK                     := $(shell which JLinkExe)
-JLINKFLAGS          	  := -If SWD -Device $(MCU) -Speed 1000 -CommanderScript
+JLINKFLAGS          	  := -If SWD -Device $(MCU) -Speed 200 -CommanderScript
 
 # Check if there is JLinkExe
 ifeq ($(JLINK),)
@@ -219,3 +251,17 @@ erase-all.jlink:
 	@echo "r" >> $(OUTPUT_BINARY_DIRECTORY)/erase_all.jlink
 
 ###############################################################################
+# upload firmware via bootloader 
+
+PRODUCT_BUNDLE	= $(BUILDROOT)/firmware.yuneec
+MKFW = $(BLTOOLSDIR)/makeFW.py
+
+$(PRODUCT_BUNDLE):	$(SKETCHBIN)
+	@echo %% Generating Firmware Image
+	$(MKFW) --prototype $(BLTOOLSDIR)/$(BOARD).prototype --git_identity $(SKETCHBOOK) --image $< > $@
+		
+.PHONY: yuneec-upload
+yuneec-upload:	$(PRODUCT_BUNDLE)
+	$(MAKE) -f $(BLTOOLSDIR)/upload.mk UPLOADER=$(BLTOOLSDIR)/uploader.py BOARD=$(BOARD) BUNDLE=$(PRODUCT_BUNDLE)
+
+	

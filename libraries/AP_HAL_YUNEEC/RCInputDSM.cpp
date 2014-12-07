@@ -2,10 +2,10 @@
 #if CONFIG_HAL_BOARD == HAL_BOARD_YUNEEC
 
 #include "RCInput.h"
+#if RECEIVER_TYPE == DSM_RECEIVER
 
-#include <stm32f37x.h>
-#include <stm32f37x_tim.h>
-#include <stm32f37x_misc.h>
+#include <stm32f4xx.h>
+#include <stm32f4xx_tim.h>
 #include <utility/pinmap_typedef.h>
 
 using namespace YUNEEC;
@@ -167,7 +167,7 @@ bool YUNEECRCInputDSM::_dsm_check_binded(void) {
 		_dsm_channel_shift = 11;
 		break;
 	case DSM_CONFIG_INT_DSMx_22MS:
-		dsm_config = DSM2_2048_11MS;
+		dsm_config = DSMx_2048_22MS;
 		_dsm_channel_shift = 11;
 		break;
 	case DSM_CONFIG_INT_DSMx_11MS:
@@ -412,5 +412,5 @@ void YUNEECRCInputDSM::_dsm_input(void) {
 //	if (callback != NULL)
 //		timer12_callback = callback;
 //}
-
+#endif
 #endif

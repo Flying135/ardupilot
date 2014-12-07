@@ -1,5 +1,6 @@
 #include <AP_Common.h>
 #include <AP_Math.h>
+#include <StorageManager.h>
 #include <AP_Param.h>
 #include <AP_Progmem.h>
 
@@ -13,26 +14,36 @@ AP_HAL::DigitalSource *blue_led;
 uint32_t i = 0;
 
 void loop (void) {
-	for (i = 0; i < 2000000; i++) /* Wait a bit. */;
-
-    hal.gpio->write(PC13, 1);
+//	for (i = 0; i < 2000000; i++) /* Wait a bit. */;
+	uint32_t start = hal.scheduler->millis();
+    hal.gpio->write(PC5, 1);
     blue_led->write(0);
 
-	for (i = 0; i < 2000000; i++) /* Wait a bit. */;
+    hal.scheduler->delay(500);
+//    hal.scheduler->delay_microseconds(10);
 
-	hal.gpio->write(PC13, 0);
+
+//	for (i = 0; i < 2000000; i++) /* Wait a bit. */;
+
+	hal.gpio->write(PC5, 0);
     blue_led->write(1);
+
+    hal.scheduler->delay(500);
+
+    uint32_t period = hal.scheduler->millis() - start;
+    hal.console->printf("period: %u", period);
+//    hal.scheduler->delay_microseconds(10);
 
 }
 
 void setup (void) {
 
-    hal.gpio->pinMode(PC13, HAL_GPIO_OUTPUT);
+    hal.gpio->pinMode(PC5, HAL_GPIO_OUTPUT);
 
-    blue_led = hal.gpio->channel(PC14);
+    blue_led = hal.gpio->channel(PC4);
     blue_led->mode(HAL_GPIO_OUTPUT);
 
-    hal.gpio->write(PC13, 0);
+    hal.gpio->write(PC5, 0);
     blue_led->write(0);
 
 }

@@ -9,26 +9,27 @@
 #include <AP_Math.h>
 #include <stdlib.h>
 
-#include <stm32f37x.h>
-#include <stm32f37x_usart.h>
-#include <stm32f37x_gpio.h>
-#include <stm32f37x_rcc.h>
-#include <stm32f37x_misc.h>
+#include <stm32f4xx.h>
+#include <stm32f4xx_usart.h>
+#include <stm32f4xx_gpio.h>
+#include <stm32f4xx_rcc.h>
 
 using namespace YUNEEC;
 
-#define MAX_USART_PORTS 3
+#define MAX_USART_PORTS 6
 
 volatile YUNEECUARTDriver::Buffer __YUNEECUARTDriver__rxBuffer[MAX_USART_PORTS];
 volatile YUNEECUARTDriver::Buffer __YUNEECUARTDriver__txBuffer[MAX_USART_PORTS];
 
 YUNEECUARTDriver::YUNEECUARTDriver(
 		const uint8_t portNumber,
-		USART_TypeDef *usart, GPIO_TypeDef* port, IRQn_Type usartIRQn,
-		const uint32_t usartClk, const uint32_t portClk,
-		const uint16_t rx_bit, const uint16_t tx_bit,
-		const uint8_t rx_pinSource, const uint8_t tx_pinSource) :
-		_usart_info{usart, port, usartIRQn, usartClk, portClk, rx_bit, tx_bit, rx_pinSource, tx_pinSource, 57600},
+		USART_TypeDef* usart, IRQn_Type usart_irqn,
+		GPIO_TypeDef* tx_port, GPIO_TypeDef* rx_port,
+		const uint16_t tx_bit, const uint16_t rx_bit,
+		const uint8_t tx_pinSource, const uint8_t rx_pinSource,
+		const uint8_t gpio_af, const uint32_t usart_clk,
+		const uint32_t tx_clk, const uint32_t rx_clk) :
+		_usart_info{usart, usart_irqn, tx_port, rx_port, tx_bit, rx_bit, tx_pinSource, rx_pinSource, gpio_af, usart_clk, tx_clk, rx_clk, 57600},
 		_initialized(false),
 		_rxBuffer(&__YUNEECUARTDriver__rxBuffer[portNumber]),
 		_txBuffer(&__YUNEECUARTDriver__txBuffer[portNumber])
@@ -46,11 +47,11 @@ void YUNEECUARTDriver::begin(uint32_t baud, uint16_t rxSpace, uint16_t txSpace) 
 		if (0 == txSpace)
 			txSpace = _txBuffer->mask + 1;
 
-		if (rxSpace == (_rxBuffer->mask + 1U) && txSpace == (_txBuffer->mask + 1U)) {
+		if (rxSpace == (_rxBuffer->mask + (uint16_t)1) && txSpace == (_txBuffer->mask + (uint16_t)1)) {
 			// avoid re-allocating the buffers if possible
 			need_allocate = false;
 			// disable USART and interrupt
-			NVIC_DisableIRQ(_usart_info.usartIRQn);
+			NVIC_DisableIRQ(_usart_info.usart_irqn);
 			_usart_info.usart->CR1 &= ~((uint32_t)USART_CR1_UE);
 
 		} else {
@@ -81,11 +82,11 @@ void YUNEECUARTDriver::begin(uint32_t baud, uint16_t rxSpace, uint16_t txSpace) 
 
 	_configPort(_usart_info);
 
-	// Enable Rx Interrupt
-	_usart_info.usart->CR1 |= USART_FLAG_RXNE;
-
 	// Enable USART
 	_usart_info.usart->CR1 |= USART_CR1_UE;
+
+	// Enable Rx Interrupt
+	_usart_info.usart->CR1 |= USART_CR1_RXNEIE;
 
 	_initialized = true;
 
@@ -93,14 +94,14 @@ void YUNEECUARTDriver::begin(uint32_t baud, uint16_t rxSpace, uint16_t txSpace) 
 
 void YUNEECUARTDriver::end() {
 	// disable interrupt and reset USART port
-	NVIC_DisableIRQ(_usart_info.usartIRQn);
+	NVIC_DisableIRQ(_usart_info.usart_irqn);
 	/* Reset register of USART  */
-	if (_usart_info.usart == USART1)	{
-	    RCC->APB2RSTR |= _usart_info.usartClk;
-	    RCC->APB2RSTR &= ~_usart_info.usartClk;
+	if ((_usart_info.usart == USART1) || (_usart_info.usart == USART6))	{
+	    RCC->APB2RSTR |= _usart_info.usart_clk;
+	    RCC->APB2RSTR &= ~_usart_info.usart_clk;
 	} else {
-	    RCC->APB1RSTR |= _usart_info.usartClk;
-	    RCC->APB1RSTR &= ~_usart_info.usartClk;
+	    RCC->APB1RSTR |= _usart_info.usart_clk;
+	    RCC->APB1RSTR &= ~_usart_info.usart_clk;
 	}
 
 	_freeBuffer(_rxBuffer);
@@ -153,7 +154,7 @@ int16_t YUNEECUARTDriver::read() {
 
 /* YUNEEC implementations of Print virtual methods */
 size_t YUNEECUARTDriver::write(uint8_t c) {
-	uint8_t i;
+	uint16_t i;
 
 	if (!_open) // drop bytes if not open
 		return 0;
@@ -175,7 +176,7 @@ size_t YUNEECUARTDriver::write(uint8_t c) {
 	_txBuffer->head = i;
 
 	// enable the data-ready interrupt, as it may be off if the buffer is empty
-	_usart_info.usart->CR1 |= USART_FLAG_TXE;
+	_usart_info.usart->CR1 |= USART_CR1_TXEIE;
 
 	// return number of bytes written (always 1)
 	return 1;
@@ -211,7 +212,7 @@ size_t YUNEECUARTDriver::write(const uint8_t *buffer, size_t size)
         memcpy(&_txBuffer->bytes[_txBuffer->head], buffer, size);
         _txBuffer->head = (_txBuffer->head + size) & _txBuffer->mask;
         // enable the data-ready interrupt, as it may be off if the buffer is empty
-        _usart_info.usart->CR1 |= USART_FLAG_TXE;
+        _usart_info.usart->CR1 |= USART_CR1_TXEIE;
         return size;
     }
 
@@ -228,7 +229,7 @@ size_t YUNEECUARTDriver::write(const uint8_t *buffer, size_t size)
     }
 
     // enable the data-ready interrupt, as it may be off if the buffer is empty
-    _usart_info.usart->CR1 |= USART_FLAG_TXE;
+    _usart_info.usart->CR1 |= USART_CR1_TXEIE;
     return size;
 }
 
@@ -242,55 +243,53 @@ void YUNEECUARTDriver::_configPort(const struct USART_Info &usart_info)
 	NVIC_InitTypeDef NVIC_InitStructure;
 
 	/* Reset register of USART  */
-	if (usart_info.usart == USART1)	{
-	    RCC->APB2RSTR |= usart_info.usartClk;
-	    RCC->APB2RSTR &= ~usart_info.usartClk;
+	if (usart_info.usart == USART1 || usart_info.usart == USART6)	{
+	    RCC->APB2RSTR |= usart_info.usart_clk;
+	    RCC->APB2RSTR &= ~usart_info.usart_clk;
 	} else {
-	    RCC->APB1RSTR |= usart_info.usartClk;
-	    RCC->APB1RSTR &= ~usart_info.usartClk;
+	    RCC->APB1RSTR |= usart_info.usart_clk;
+	    RCC->APB1RSTR &= ~usart_info.usart_clk;
 	}
 
 	/* Enable GPIO clock */
-    RCC->AHBENR |= usart_info.portClk;
+    RCC->AHB1ENR |= (usart_info.tx_clk | usart_info.rx_clk);
 
 	/* Enable USART clock */
-	if(usart_info.usart == USART1)
-	    RCC->APB2ENR |= usart_info.usartClk;
+	if(usart_info.usart == USART1 || usart_info.usart == USART6)
+	    RCC->APB2ENR |= usart_info.usart_clk;
 	else
-	    RCC->APB1ENR |= usart_info.usartClk;
+	    RCC->APB1ENR |= usart_info.usart_clk;
 
 	/* Connect PXx to USARTx_Tx */
-	GPIO_PinAFConfig(usart_info.port, usart_info.tx_pinSource, GPIO_AF_7);
+	GPIO_PinAFConfig(usart_info.tx_port, usart_info.tx_pinSource, usart_info.gpio_af);
 	/* Connect PXx to USARTx_Rx */
-	GPIO_PinAFConfig(usart_info.port, usart_info.rx_pinSource, GPIO_AF_7);
+	GPIO_PinAFConfig(usart_info.rx_port, usart_info.rx_pinSource, usart_info.gpio_af);
 
-	/* Configure USART Tx as alternate function push-pull */
-	GPIO_InitStructure.GPIO_Pin = usart_info.tx_bit;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
 	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
-	GPIO_Init(usart_info.port, &GPIO_InitStructure);
+	/* Configure USART Tx as alternate function push-pull */
+	GPIO_InitStructure.GPIO_Pin = usart_info.tx_bit;
+	GPIO_Init(usart_info.tx_port, &GPIO_InitStructure);
 
 	/* Configure USART Rx as alternate function push-pull */
 	GPIO_InitStructure.GPIO_Pin = usart_info.rx_bit;
-	GPIO_Init(usart_info.port, &GPIO_InitStructure);
+	GPIO_Init(usart_info.rx_port, &GPIO_InitStructure);
 
 	/* USART configuration */
-	USART_InitStructure.USART_BaudRate = usart_info.baudrate;
-	USART_InitStructure.USART_WordLength = USART_WordLength_8b;
-	USART_InitStructure.USART_StopBits = USART_StopBits_1;
-	USART_InitStructure.USART_Parity = USART_Parity_No;
-	USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
+	USART_InitStructure.USART_BaudRate 		= usart_info.baudrate;
+	USART_InitStructure.USART_WordLength 	= USART_WordLength_8b;
+	USART_InitStructure.USART_StopBits 		= USART_StopBits_1;
+	USART_InitStructure.USART_Parity 		= USART_Parity_No;
+	USART_InitStructure.USART_Mode 			= USART_Mode_Rx | USART_Mode_Tx;
 	USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
 	USART_Init(usart_info.usart, &USART_InitStructure);
-	/* Disable overrun detection */
-	usart_info.usart->CR3 |= ((uint32_t)USART_CR3_OVRDIS);
 
 	/* Configure two bits for preemption priority */
 	NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
 	/* Enable the USART Interrupt */
-	NVIC_InitStructure.NVIC_IRQChannel = usart_info.usartIRQn;
+	NVIC_InitStructure.NVIC_IRQChannel = usart_info.usart_irqn;
 	NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
 	NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
 	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
@@ -303,8 +302,8 @@ void YUNEECUARTDriver::_configPort(const struct USART_Info &usart_info)
 
 bool YUNEECUARTDriver::_allocBuffer(volatile Buffer *buffer, uint16_t size)
 {
-	uint8_t  mask;
-	uint8_t	 shift;
+	uint16_t mask;
+	uint16_t shift;
 
 	// init buffer state
 	buffer->head = buffer->tail = 0;
@@ -313,7 +312,7 @@ bool YUNEECUARTDriver::_allocBuffer(volatile Buffer *buffer, uint16_t size)
 	// and then a mask to simplify wrapping operations.  Using __builtin_clz
 	// would seem to make sense, but it uses a 256(!) byte table.
 	// Note that we ignore requests for more than BUFFER_MAX space.
-	for (shift = 1; (1U << shift) < min(_max_buffer_size, size); shift++)
+	for (shift = 1; ((uint16_t)1 << shift) < min(_max_buffer_size, size); shift++)
 		;
 	mask = (1U << shift) - 1;
 

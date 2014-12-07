@@ -1,64 +1,109 @@
-/*******************************************
-*   Sample sketch that configures an HMC5883L 3 axis
-*   magnetometer to continuous mode and reads back
-*   the three axis of data.
-*******************************************/
-
+/*
+  generic Baro driver test
+ */
 #include <AP_Common.h>
-#include <AP_Math.h>
-#include <AP_Param.h>
 #include <AP_Progmem.h>
-
+#include <AP_Param.h>
+#include <AP_Math.h>
 #include <AP_HAL.h>
-#include <AP_HAL_YUNEEC.h>
+#include <AP_Buffer.h>
+#include <Filter.h>
 #include <AP_Baro.h>
-#include <Filter.h>             // Filter library
-#include <utility/pinmap_typedef.h>
+#include <AP_Notify.h>
+#include <AP_GPS.h>
+#include <GCS_MAVLink.h>
+#include <AP_Vehicle.h>
+#include <DataFlash.h>
+#include <AP_InertialSensor.h>
+#include <AP_Mission.h>
+#include <StorageManager.h>
+#include <AP_Terrain.h>
+#include <AP_ADC.h>
+#include <AP_ADC_AnalogSource.h>
+#include <AP_NavEKF.h>
+#include <AP_AHRS.h>
+#include <AP_Compass.h>
+#include <AP_Declination.h>
+#include <AP_Airspeed.h>
+#include <AP_HAL_AVR.h>
+#include <AP_HAL_AVR_SITL.h>
+#include <AP_HAL_Linux.h>
+#include <AP_HAL_FLYMAPLE.h>
+#include <AP_HAL_PX4.h>
+#include <AP_HAL_YUNEEC.h>
+#include <AP_HAL_Empty.h>
 
 const AP_HAL::HAL& hal = AP_HAL_BOARD_DRIVER;
 
-AP_HAL::DigitalSource *led;
-static AP_Baro_MS5611 baro(&AP_Baro_MS5611::i2c);
+#define CONFIG_BARO HAL_BARO_DEFAULT
+
+#if CONFIG_BARO == HAL_BARO_BMP085
+static AP_Baro_BMP085 barometer;
+#elif CONFIG_BARO == HAL_BARO_PX4
+static AP_Baro_PX4 barometer;
+#elif CONFIG_BARO == HAL_BARO_VRBRAIN
+static AP_Baro_VRBRAIN barometer;
+#elif CONFIG_BARO == HAL_BARO_HIL
+static AP_Baro_HIL barometer;
+#elif CONFIG_BARO == HAL_BARO_MS5611
+static AP_Baro_MS5611 barometer(&AP_Baro_MS5611::i2c);
+#elif CONFIG_BARO == HAL_BARO_MS5611_SPI
+static AP_Baro_MS5611 barometer(&AP_Baro_MS5611::spi);
+#else
+ #error Unrecognized CONFIG_BARO setting
+#endif
+
 static uint32_t timer;
 
 void setup()
 {
-    hal.console->println("YUNEEC MS5611 Barometer library test");
+    hal.console->println("Barometer library test");
 
     hal.scheduler->delay(1000);
 
-    /* What's this for? */
-    hal.gpio->pinMode(PC13, HAL_GPIO_OUTPUT);
-    hal.gpio->write(PC13, 0);
-
-    baro.init();
-    baro.calibrate();
+    barometer.init();
+    barometer.calibrate();
 
     timer = hal.scheduler->micros();
+
 }
 
 void loop()
 {
+	static uint8_t highSpeed = 0;
+	static uint32_t last = hal.scheduler->millis();
+	if (hal.scheduler->millis() - last > 50) {
+		last = hal.scheduler->millis();
+		if (highSpeed == 0) {
+			hal.i2c->setHighSpeed(true);
+			highSpeed = 1;
+		} else {
+			hal.i2c->setHighSpeed(false);
+			highSpeed = 0;
+		}
+
+	}
+
     if((hal.scheduler->micros() - timer) > 100000UL) {
         timer = hal.scheduler->micros();
-        baro.read();
+
+        barometer.read();
         uint32_t read_time = hal.scheduler->micros() - timer;
-        if (!baro.healthy) {
+        float alt = barometer.get_altitude();
+        if (!barometer.healthy()) {
             hal.console->println("not healthy");
             return;
         }
-        hal.console->print("Lock up count: ");
-        hal.console->print(hal.i2c->lockup_count());
-        hal.console->print(" Pressure:");
-        hal.console->print(baro.get_pressure());
+        hal.console->print("Pressure:");
+        hal.console->print(barometer.get_pressure());
         hal.console->print(" Temperature:");
-        hal.console->print(baro.get_temperature());
+        hal.console->print(barometer.get_temperature());
         hal.console->print(" Altitude:");
-        hal.console->print(baro.get_altitude());
+        hal.console->print(alt);
         hal.console->printf(" climb=%.2f t=%u samples=%u",
-                      baro.get_climb_rate(),
+                      barometer.get_climb_rate(),
                       (unsigned)read_time,
-                      (unsigned)baro.get_pressure_samples());
+                      (unsigned)barometer.get_pressure_samples());
         hal.console->println();
     }
 }

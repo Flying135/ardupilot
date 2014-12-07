@@ -42,11 +42,11 @@ void AP_HAL::UARTDriver::printf(const char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    vprintf(fmt, ap);
+    vprintf(fmt, &ap);
     va_end(ap);
 }
 
-void AP_HAL::UARTDriver::vprintf(const char *fmt, va_list ap) 
+void AP_HAL::UARTDriver::vprintf(const char *fmt, va_list* ap)
 {
     print_vprintf((AP_HAL::Print*)this, 0, fmt, ap);
 }
@@ -55,11 +55,11 @@ void AP_HAL::UARTDriver::_printf_P(const prog_char *fmt, ...)
 {
     va_list ap;
     va_start(ap, fmt);
-    vprintf_P(fmt, ap);
+    vprintf_P(fmt, &ap);
     va_end(ap);
 }
 
-void AP_HAL::UARTDriver::vprintf_P(const prog_char *fmt, va_list ap) 
+void AP_HAL::UARTDriver::vprintf_P(const prog_char *fmt, va_list* ap)
 {
     print_vprintf((AP_HAL::Print*)this, 1, fmt, ap);
 }

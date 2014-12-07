@@ -6,6 +6,14 @@
 #define __AP_HAL_YUNEEC_GPIO_H__
 
 #include <AP_HAL_YUNEEC.h>
+#include <utility/pinmap_typedef.h>
+
+#define HAL_GPIO_USB_MUX_PIN	PA9
+
+#define HAL_GPIO_INPUT  0
+#define HAL_GPIO_OUTPUT 1
+#define HAL_GPIO_ANALOG 2
+#define HAL_GPIO_AF		3
 
 class YUNEEC::YUNEECGPIO : public AP_HAL::GPIO {
 public:

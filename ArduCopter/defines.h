@@ -407,7 +407,8 @@ enum FlipState {
 enum Serial2Protocol {
     SERIAL2_MAVLINK     = 1,
     SERIAL2_FRSKY_DPORT = 2,
-    SERIAL2_FRSKY_SPORT = 3 // not supported yet
+    SERIAL2_FRSKY_SPORT = 3, // not supported yet
+    SERIAL2_YUNEEC_ST24 = 4 // not supported yet
 };
 
 #endif // _DEFINES_H

@@ -30,10 +30,6 @@ void AP_Notify::init(bool enable_external_leds)
     toshibaled.init();
     tonealarm.init();
 #endif
-#if CONFIG_HAL_BOARD == HAL_BOARD_LINUX
-    toshibaled.init();
-    tonealarm.init();
-#endif    
 #if CONFIG_HAL_BOARD == HAL_BOARD_APM1 || CONFIG_HAL_BOARD == HAL_BOARD_APM2
     externalled.init();
     buzzer.init();
@@ -42,6 +38,9 @@ void AP_Notify::init(bool enable_external_leds)
     toshibaled.init();
     externalled.init();
     buzzer.init();
+#endif
+#if CONFIG_HAL_BOARD == HAL_BOARD_YUNEEC
+    toshibaled.init();
 #endif
 }
 
@@ -54,10 +53,6 @@ void AP_Notify::update(void)
     toshibaled.update();
     tonealarm.update();
 #endif
-#if CONFIG_HAL_BOARD == HAL_BOARD_LINUX
-    toshibaled.update();
-    tonealarm.update();
-#endif
 #if CONFIG_HAL_BOARD == HAL_BOARD_APM1 || CONFIG_HAL_BOARD == HAL_BOARD_APM2
     externalled.update();
     buzzer.update();
@@ -66,5 +61,8 @@ void AP_Notify::update(void)
     toshibaled.update();
     externalled.update();
     buzzer.update();
+#endif
+#if CONFIG_HAL_BOARD == HAL_BOARD_YUNEEC
+    toshibaled.update();
 #endif
 }

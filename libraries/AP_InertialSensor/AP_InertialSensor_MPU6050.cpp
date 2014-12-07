@@ -66,19 +66,19 @@ extern const AP_HAL::HAL& hal;
 #       define BIT_UNKNOWN_INT_EN                               0x04
 #       define BIT_I2C_MST_INT_EN                               0x08
 #       define BIT_FIFO_OFLOW_EN                                0x10
-#       define BIT_ZMOT_EN                                              0x20
-#       define BIT_MOT_EN                                               0x40
-#       define BIT_FF_EN                                                0x80
+#       define BIT_ZMOT_EN                                      0x20
+#       define BIT_MOT_EN                                       0x40
+#       define BIT_FF_EN                                        0x80
 #define MPUREG_INT_STATUS                               0x3A
 // bit definitions for MPUREG_INT_STATUS (same bit pattern as above because this register shows what interrupt actually fired)
 #       define BIT_RAW_RDY_INT                                  0x01
-#       define BIT_DMP_INT                                              0x02
+#       define BIT_DMP_INT                                      0x02
 #       define BIT_UNKNOWN_INT                                  0x04
 #       define BIT_I2C_MST_INT                                  0x08
 #       define BIT_FIFO_OFLOW_INT                               0x10
-#       define BIT_ZMOT_INT                                             0x20
-#       define BIT_MOT_INT                                              0x40
-#       define BIT_FF_INT                                               0x80
+#       define BIT_ZMOT_INT                                     0x20
+#       define BIT_MOT_INT                                      0x40
+#       define BIT_FF_INT                                       0x80
 #define MPUREG_ACCEL_XOUT_H                             0x3B
 #define MPUREG_ACCEL_XOUT_L                             0x3C
 #define MPUREG_ACCEL_YOUT_H                             0x3D
@@ -210,7 +210,7 @@ AP_InertialSensor_Backend *AP_InertialSensor_MPU6050::detect(AP_InertialSensor &
     return sensor;
 }
 
-uint16_t AP_InertialSensor_MPU6050::_init_sensor(void)
+bool AP_InertialSensor_MPU6050::_init_sensor(void)
 {
     _i2c = hal.i2c2;
     _i2c_sem = _i2c->get_semaphore();
@@ -296,9 +296,7 @@ bool AP_InertialSensor_MPU6050::update( void )
 
     if (_last_filter_hz != _imu.get_filter()) {
         if (_i2c_sem->take(10)) {
-            _i2c->set_bus_speed(false);
             _set_filter_register(_imu.get_filter());
-            _i2c->set_bus_speed(true);
             _i2c_sem->give();
         }
     }
@@ -314,7 +312,7 @@ bool AP_InertialSensor_MPU6050::update( void )
  * We use the data ready pin if it is available.  Otherwise, read the
  * status register.
  */
-bool AP_InertialSensor_MPU6050::_data_ready()
+bool AP_InertialSensor_MPU6050::_data_ready(void)
 {
 #ifdef MPU6050_DRDY_PIN
     if (_drdy_pin) {
@@ -339,36 +337,36 @@ void AP_InertialSensor_MPU6050::_poll_data(void)
     _i2c_sem->give();
 }
 
-
-void AP_InertialSensor_MPU6050::_read_data_transaction() {
+void AP_InertialSensor_MPU6050::_read_data_transaction(void) {
     /* one resister address followed by seven 2-byte registers */
     struct PACKED {
-        uint8_t int_status;
         uint8_t v[14];
     } rxBuf;
     
-    if (_i2c->readRegisters(MPU6050_ADDR, MPUREG_INT_STATUS, sizeof(rxBuf), (uint8_t *)&rxBuf) == 0) {
+    if (_i2c->readRegisters(MPU6050_ADDR, MPUREG_ACCEL_XOUT_H, sizeof(rxBuf), (uint8_t *)&rxBuf) == 0) {
 
 #define int16_val(v, idx) ((int16_t)(((uint16_t)v[2*idx] << 8) | v[2*idx+1]))
 #if MPU6050_FAST_SAMPLING
-    _accel_filtered = Vector3f(_accel_filter_x.apply(int16_val(rx.v, 1)),
-                               _accel_filter_y.apply(int16_val(rx.v, 0)),
-                               _accel_filter_z.apply(-int16_val(rx.v, 2)));
+    _accel_filtered = Vector3f(_accel_filter_x.apply(int16_val(rxBuf.v, 1)),
+                               _accel_filter_y.apply(int16_val(rxBuf.v, 0)),
+                               _accel_filter_z.apply(-int16_val(rxBuf.v, 2)));
 
-    _gyro_filtered = Vector3f(_gyro_filter_x.apply(int16_val(rx.v, 5)),
-                              _gyro_filter_y.apply(int16_val(rx.v, 4)),
-                              _gyro_filter_z.apply(-int16_val(rx.v, 6)));
+    _gyro_filtered = Vector3f(_gyro_filter_x.apply(int16_val(rxBuf.v, 5)),
+                              _gyro_filter_y.apply(int16_val(rxBuf.v, 4)),
+                              _gyro_filter_z.apply(-int16_val(rxBuf.v, 6)));
 #else
-    _accel_sum.x += int16_val(rx.v, 1);
-    _accel_sum.y += int16_val(rx.v, 0);
-    _accel_sum.z -= int16_val(rx.v, 2);
-    _gyro_sum.x  += int16_val(rx.v, 5);
-    _gyro_sum.y  += int16_val(rx.v, 4);
-    _gyro_sum.z  -= int16_val(rx.v, 6);
+    _accel_sum.x += int16_val(rxBuf.v, 1);
+    _accel_sum.y += int16_val(rxBuf.v, 0);
+    _accel_sum.z -= int16_val(rxBuf.v, 2);
+    _gyro_sum.x  += int16_val(rxBuf.v, 5);
+    _gyro_sum.y  += int16_val(rxBuf.v, 4);
+    _gyro_sum.z  -= int16_val(rxBuf.v, 6);
 #endif
-    _sum_count++;
-    } else
+    } else {
     	_error_count++;
+    }
+
+    _sum_count++;
 
 #if !MPU6050_FAST_SAMPLING
     if (_sum_count == 0) {
@@ -414,6 +412,8 @@ void AP_InertialSensor_MPU6050::_register_write_check(uint8_t reg, uint8_t val)
  */
 void AP_InertialSensor_MPU6050::_set_filter_register(uint8_t filter_hz)
 {
+    _last_filter_hz = filter_hz;
+
     if (filter_hz == 0) {
         filter_hz = _default_filter();
     }
@@ -430,12 +430,12 @@ void AP_InertialSensor_MPU6050::_set_filter_register(uint8_t filter_hz)
     } else {
         filter = BITS_DLPF_CFG_98HZ;
     }
-    _last_filter_hz = filter_hz;
+
     _register_write(MPUREG_CONFIG, filter);
 }
 
 
-bool AP_InertialSensor_MPU6050::_hardware_init(Sample_rate sample_rate)
+bool AP_InertialSensor_MPU6050::_hardware_init(void)
 {
     if (!_i2c_sem->take(100)) {
         hal.scheduler->panic(PSTR("MPU6050: Unable to get semaphore"));
@@ -510,8 +510,8 @@ bool AP_InertialSensor_MPU6050::_hardware_init(Sample_rate sample_rate)
     hal.scheduler->delay(1);
 
     // read the product ID rev c has 1/2 the sensitivity of rev d
-    _mpu6050_product_id = _register_read(MPUREG_PRODUCT_ID);
-    //Serial.printf("Product_ID= 0x%x\n", (unsigned) _mpu6050_product_id);
+    _product_id = _register_read(MPUREG_PRODUCT_ID);
+    //hal.console->printf("Product_ID= 0x%x\n", (unsigned) _mpu6050_product_id);
 
     if ((_product_id == MPU6000ES_REV_C4) ||
         (_product_id == MPU6000ES_REV_C5) ||

@@ -68,7 +68,7 @@ void loop()
     // display output at 1hz
     if (counter >= 10) {
         counter = 0;
-        hal.console->printf("\nVoltage: %.2f \tCurrent: %.2f \tTotCurr:%.2f",
+        hal.console->printf("\nVoltage: %.2f \tCurrent: %.5f \tTotCurr:%.5f",
 			    battery_mon.voltage(),
 			    battery_mon.current_amps(),
                 battery_mon.current_total_mah());

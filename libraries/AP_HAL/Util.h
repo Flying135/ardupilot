@@ -15,10 +15,10 @@ public:
                    const prog_char_t *format, ...);
 
     int vsnprintf(char* str, size_t size,
-                  const char *format, va_list ap);
+                  const char *format, va_list* ap);
 
     int vsnprintf_P(char* str, size_t size,
-                    const prog_char_t *format, va_list ap);
+                    const prog_char_t *format, va_list* ap);
 
     // run a debug shall on the given stream if possible. This is used
     // to support dropping into a debug shell to run firmware upgrade

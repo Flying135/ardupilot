@@ -52,8 +52,8 @@ public:
 
 #define printf_P(fmt, ...) _printf_P((const prog_char *)fmt, ## __VA_ARGS__)
     
-    virtual void vprintf(const char *, va_list) = 0;
-    virtual void vprintf_P(const prog_char *, va_list) = 0;
+    virtual void vprintf(const char *, va_list *) = 0;
+    virtual void vprintf_P(const prog_char *, va_list *) = 0;
 };
 
 #endif // __AP_HAL_UTILITY_BETTERSTREAM_H__

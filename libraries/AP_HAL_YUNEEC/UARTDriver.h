@@ -6,15 +6,18 @@
 #define __AP_HAL_YUNEEC_UARTDRIVER_H__
 
 #include <AP_HAL_YUNEEC.h>
+#include <AP_Common.h>
 
 class YUNEEC::YUNEECUARTDriver : public AP_HAL::UARTDriver {
 public:
     YUNEECUARTDriver(
     		const uint8_t portNumber,
-    		USART_TypeDef *usart, GPIO_TypeDef* port, IRQn_Type usartIRQn,
-    		const uint32_t usartClk, const uint32_t portClk,
-    		const uint16_t rx_bit, const uint16_t tx_bit,
-    		const uint8_t rx_pinSource, const uint8_t tx_pinSource);
+    		USART_TypeDef* usart, IRQn_Type usart_irqn,
+    		GPIO_TypeDef* tx_port, GPIO_TypeDef* rx_port,
+    		const uint16_t tx_bit, const uint16_t rx_bit,
+    		const uint8_t tx_pinSource, const uint8_t rx_pinSource,
+    		const uint8_t gpio_af, const uint32_t usart_clk,
+    		const uint32_t tx_clk, const uint32_t rx_clk);
     /* YUNEEC implementations of UARTDriver virtual methods */
     void begin(uint32_t baud) { begin(baud, 0, 0); };
     void begin(uint32_t baud, uint16_t rxSpace, uint16_t txSpace);
@@ -37,8 +40,8 @@ public:
 	///
 	/// Public so the interrupt handlers can see it
 	typedef struct {
-		volatile uint8_t head, tail;	///< head and tail pointers
-		uint8_t mask;					///< buffer size mask for pointer wrap
+		volatile uint16_t head, tail;	///< head and tail pointers
+		uint16_t mask;					///< buffer size mask for pointer wrap
 		uint8_t *bytes;					///< pointer to allocated buffer
 	} Buffer;
 
@@ -46,14 +49,17 @@ private:
 	// Specify info of USART port
 	struct USART_Info{
 		USART_TypeDef*	usart;
-		GPIO_TypeDef*	port;
-		IRQn_Type		usartIRQn;
-		const uint32_t	usartClk;
-		const uint32_t	portClk;
-		const uint16_t 	rx_bit;
+		IRQn_Type		usart_irqn;
+		GPIO_TypeDef*	tx_port;
+		GPIO_TypeDef*	rx_port;
 		const uint16_t 	tx_bit;
-		const uint8_t 	rx_pinSource;
+		const uint16_t 	rx_bit;
 		const uint8_t 	tx_pinSource;
+		const uint8_t 	rx_pinSource;
+		const uint8_t 	gpio_af;
+		const uint32_t	usart_clk;
+		const uint32_t	tx_clk;
+		const uint32_t 	rx_clk;
 		uint32_t		baudrate;
 	} _usart_info;
 
@@ -103,12 +109,12 @@ extern volatile YUNEEC::YUNEECUARTDriver::Buffer __YUNEECUARTDriver__txBuffer[];
 // USART Interrupt Handlers
 //----------------------------------------------------------------------------
 inline void UARTBufferUpdater(USART_TypeDef* usart, uint8_t portNum) {
-	uint8_t c;
-	uint8_t i;
+	static uint8_t c;
+	static uint16_t i;
 
-	if((usart->CR1 & USART_FLAG_RXNE) && (usart->ISR & USART_FLAG_RXNE)) {
+	if((usart->CR1 & USART_CR1_RXNEIE) && (usart->SR & USART_FLAG_RXNE)) {
 		/* read the byte as quickly as possible */
-		c = (uint8_t)(usart->RDR & 0x0ff);
+		c = (uint8_t)(usart->DR & 0x0ff);
 		/* work out where the head will go next */
 		i = (__YUNEECUARTDriver__rxBuffer[portNum].head + 1) & __YUNEECUARTDriver__rxBuffer[portNum].mask;
 		/* decide whether we have space for another byte */
@@ -119,15 +125,15 @@ inline void UARTBufferUpdater(USART_TypeDef* usart, uint8_t portNum) {
 		}
 	}
 
-	if((usart->CR1 & USART_FLAG_TXE) && (usart->ISR & USART_FLAG_TXE)) {
+	if((usart->CR1 & USART_CR1_TXEIE) && (usart->SR & USART_FLAG_TXE)) {
 		/* if there is another character to send */
 		if (__YUNEECUARTDriver__txBuffer[portNum].tail != __YUNEECUARTDriver__txBuffer[portNum].head) {
-			usart->TDR = (uint16_t)__YUNEECUARTDriver__txBuffer[portNum].bytes[__YUNEECUARTDriver__txBuffer[portNum].tail];
+			usart->DR = (uint16_t)__YUNEECUARTDriver__txBuffer[portNum].bytes[__YUNEECUARTDriver__txBuffer[portNum].tail] & (uint16_t)0x00FF;
 			/* increment the tail */
 			__YUNEECUARTDriver__txBuffer[portNum].tail = (__YUNEECUARTDriver__txBuffer[portNum].tail + 1) & __YUNEECUARTDriver__txBuffer[portNum].mask;
 		} else {
 			/* there are no more bytes to send, disable the interrupt */
-			usart->CR1 &= ~USART_FLAG_TXE;
+			usart->CR1 &= ~USART_CR1_TXEIE;
 		}
 	}
 
@@ -147,35 +153,80 @@ struct hack
 //----------------------------------------------------------------------------
 // USART Instance
 //----------------------------------------------------------------------------
-#define USART1_PORT				GPIOA
-#define USART1_TX_BIT			GPIO_Pin_9
-#define USART1_RX_BIT			GPIO_Pin_10
-#define USART1_TX_PINSOURCE 	GPIO_PinSource9
-#define USART1_RX_PINSOURCE 	GPIO_PinSource10
-#define RCC_USART1_CLK			RCC_APB2Periph_USART1
-#define RCC_USART1_GPIOCLK		RCC_AHBPeriph_GPIOA
+#define USART1_TX_PORT				GPIOB
+#define USART1_RX_PORT				GPIOB
+#define USART1_TX_BIT				GPIO_Pin_6
+#define USART1_RX_BIT				GPIO_Pin_7
+#define USART1_TX_PINSOURCE 		GPIO_PinSource6
+#define USART1_RX_PINSOURCE 		GPIO_PinSource7
+#define USART1_GPIO_AF				GPIO_AF_USART1
+#define USART1_RCC_CLK				RCC_APB2Periph_USART1
+#define USART1_RCC_GPIO_TX_CLK		RCC_AHB1Periph_GPIOB
+#define USART1_RCC_GPIO_RX_CLK		RCC_AHB1Periph_GPIOB
 
-#define USART2_PORT				GPIOA
-#define USART2_TX_BIT			GPIO_Pin_2
-#define USART2_RX_BIT			GPIO_Pin_3
-#define USART2_TX_PINSOURCE 	GPIO_PinSource2
-#define USART2_RX_PINSOURCE 	GPIO_PinSource3
-#define RCC_USART2_CLK			RCC_APB1Periph_USART2
-#define RCC_USART2_GPIOCLK		RCC_AHBPeriph_GPIOA
+#define USART2_TX_PORT				GPIOD
+#define USART2_RX_PORT				GPIOD
+#define USART2_TX_BIT				GPIO_Pin_5
+#define USART2_RX_BIT				GPIO_Pin_6
+#define USART2_TX_PINSOURCE 		GPIO_PinSource5
+#define USART2_RX_PINSOURCE 		GPIO_PinSource6
+#define USART2_GPIO_AF				GPIO_AF_USART2
+#define USART2_RCC_CLK				RCC_APB1Periph_USART2
+#define USART2_RCC_GPIO_TX_CLK		RCC_AHB1Periph_GPIOD
+#define USART2_RCC_GPIO_RX_CLK		RCC_AHB1Periph_GPIOD
 
-#define USART3_PORT				GPIOB
-#define USART3_TX_BIT			GPIO_Pin_8
-#define USART3_RX_BIT			GPIO_Pin_9
-#define USART3_TX_PINSOURCE 	GPIO_PinSource8
-#define USART3_RX_PINSOURCE 	GPIO_PinSource9
-#define RCC_USART3_CLK			RCC_APB1Periph_USART3
-#define RCC_USART3_GPIOCLK		RCC_AHBPeriph_GPIOB
+#define USART3_TX_PORT				GPIOD
+#define USART3_RX_PORT				GPIOD
+#define USART3_TX_BIT				GPIO_Pin_8
+#define USART3_RX_BIT				GPIO_Pin_9
+#define USART3_TX_PINSOURCE 		GPIO_PinSource8
+#define USART3_RX_PINSOURCE 		GPIO_PinSource9
+#define USART3_GPIO_AF				GPIO_AF_USART3
+#define USART3_RCC_CLK				RCC_APB1Periph_USART3
+#define USART3_RCC_GPIO_TX_CLK		RCC_AHB1Periph_GPIOD
+#define USART3_RCC_GPIO_RX_CLK		RCC_AHB1Periph_GPIOD
 
-#define YUNEECUARTDriverInstance(USARTx, portNum)                       	\
-YUNEECUARTDriver USARTx##Driver(portNum, 									\
-							USARTx, USARTx##_PORT, USARTx##_IRQn, 			\
-							RCC_##USARTx##_CLK, RCC_##USARTx##_GPIOCLK,		\
-							USARTx##_RX_BIT, USARTx##_TX_BIT,				\
-							USARTx##_RX_PINSOURCE, USARTx##_TX_PINSOURCE)
+#define UART4_TX_PORT				GPIOC
+#define UART4_RX_PORT				GPIOC
+#define UART4_TX_BIT				GPIO_Pin_10
+#define UART4_RX_BIT				GPIO_Pin_11
+#define UART4_TX_PINSOURCE 			GPIO_PinSource10
+#define UART4_RX_PINSOURCE 			GPIO_PinSource11
+#define UART4_GPIO_AF				GPIO_AF_UART4
+#define UART4_RCC_CLK				RCC_APB1Periph_UART4
+#define UART4_RCC_GPIO_TX_CLK		RCC_AHB1Periph_GPIOC
+#define UART4_RCC_GPIO_RX_CLK		RCC_AHB1Periph_GPIOC
+
+#define UART5_TX_PORT				GPIOC
+#define UART5_RX_PORT				GPIOD
+#define UART5_TX_BIT				GPIO_Pin_12
+#define UART5_RX_BIT				GPIO_Pin_2
+#define UART5_TX_PINSOURCE 			GPIO_PinSource12
+#define UART5_RX_PINSOURCE 			GPIO_PinSource2
+#define UART5_GPIO_AF				GPIO_AF_UART5
+#define UART5_RCC_CLK				RCC_APB1Periph_UART5
+#define UART5_RCC_GPIO_TX_CLK		RCC_AHB1Periph_GPIOC
+#define UART5_RCC_GPIO_RX_CLK		RCC_AHB1Periph_GPIOD
+
+#define USART6_TX_PORT				GPIOC
+#define USART6_RX_PORT				GPIOC
+#define USART6_TX_BIT				GPIO_Pin_6
+#define USART6_RX_BIT				GPIO_Pin_7
+#define USART6_TX_PINSOURCE 		GPIO_PinSource6
+#define USART6_RX_PINSOURCE 		GPIO_PinSource7
+#define USART6_GPIO_AF				GPIO_AF_USART6
+#define USART6_RCC_CLK				RCC_APB2Periph_USART6
+#define USART6_RCC_GPIO_TX_CLK		RCC_AHB1Periph_GPIOC
+#define USART6_RCC_GPIO_RX_CLK		RCC_AHB1Periph_GPIOC
+
+#define YUNEECUARTDriverInstance(USARTx, portNum)                       			\
+YUNEECUARTDriver USARTx##Driver(portNum, 											\
+								USARTx, USARTx##_IRQn,								\
+								USARTx##_TX_PORT, USARTx##_RX_PORT,  				\
+								USARTx##_TX_BIT, USARTx##_RX_BIT,					\
+								USARTx##_TX_PINSOURCE, USARTx##_RX_PINSOURCE,		\
+								USARTx##_GPIO_AF, USARTx##_RCC_CLK,					\
+								USARTx##_RCC_GPIO_TX_CLK, USARTx##_RCC_GPIO_RX_CLK  \
+								)
 
 #endif // __AP_HAL_YUNEEC_UARTDRIVER_H__

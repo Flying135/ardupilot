@@ -176,6 +176,10 @@ static void init_ardupilot()
     }
 #endif
 
+#if ST24_TELEM_ENABLED == ENABLED
+    st24_telemetry.init(hal.uartD);
+#endif
+
     // identify ourselves correctly with the ground station
     mavlink_system.sysid = g.sysid_this_mav;
     mavlink_system.type = 2; //MAV_QUADROTOR;
@@ -405,6 +409,9 @@ static void telemetry_send(void)
 #if FRSKY_TELEM_ENABLED == ENABLED
     frsky_telemetry.send_frames((uint8_t)control_mode, 
                                 (AP_Frsky_Telem::FrSkyProtocol)g.serial2_protocol.get());
+#endif
+#if ST24_TELEM_ENABLED == ENABLED
+    st24_telemetry.send_frames();
 #endif
 }
 

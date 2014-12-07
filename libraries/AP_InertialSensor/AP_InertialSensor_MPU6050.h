@@ -15,6 +15,9 @@
 // enable debug to see a register dump on startup
 #define MPU6050_DEBUG 0
 
+// we don't have hardware INT pin connected
+#undef MPU6050_DRDY_PIN
+
 // on fast CPUs we sample at 1kHz and use a software filter
 #if HAL_CPU_CLASS >= HAL_CPU_CLASS_75
 #define MPU6050_FAST_SAMPLING 1
@@ -55,9 +58,9 @@ private:
 #endif
 
     bool                 _init_sensor(void);
-    bool                 _sample_available();
-    void                 _read_data_transaction();
-    bool                 _data_ready();
+    bool                 _sample_available(void);
+    void                 _read_data_transaction(void);
+    bool                 _data_ready(void);
     void                 _poll_data(void);
     uint8_t              _register_read( uint8_t reg );
     void                 _register_write( uint8_t reg, uint8_t val );

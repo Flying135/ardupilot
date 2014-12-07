@@ -45,15 +45,17 @@ AVR_OBJCOPY :=  $(call FIND_TOOL,avr-objcopy)
 AVRDUDE      :=  $(call FIND_TOOL,avrdude)
 AVARICE      :=  $(call FIND_TOOL,avarice)
 
-ARM_CXX     :=  $(call FIND_TOOL,arm-none-eabi-g++)
-ARM_CC      :=  $(call FIND_TOOL,arm-none-eabi-gcc)
-ARM_AS      :=  $(call FIND_TOOL,arm-none-eabi-gcc)
-ARM_AR      :=  $(call FIND_TOOL,arm-none-eabi-ar)
-ARM_LD      :=  $(call FIND_TOOL,arm-none-eabi-gcc)
-ARM_GDB     :=  $(call FIND_TOOL,arm-none-eabi-gdb)
-ARM_OBJCOPY :=  $(call FIND_TOOL,arm-none-eabi-objcopy)
-ARM_OBJDUMP :=	$(call FIND_TOOL,arm-none-eabi-objdump)
-ARM_SIZE	:=	$(call FIND_TOOL,arm-none-eabi-size)
+TOOLCHAIN_PATH := /usr/local/gcc-arm-none-eabi-4_8-2014q3/bin
+
+ARM_CXX     :=  $(TOOLCHAIN_PATH)/arm-none-eabi-g++
+ARM_CC      :=  $(TOOLCHAIN_PATH)/arm-none-eabi-gcc
+ARM_AS      :=  $(TOOLCHAIN_PATH)/arm-none-eabi-gcc
+ARM_AR      :=  $(TOOLCHAIN_PATH)/arm-none-eabi-ar
+ARM_LD      :=  $(TOOLCHAIN_PATH)/arm-none-eabi-gcc
+ARM_GDB     :=  $(TOOLCHAIN_PATH)/arm-none-eabi-gdb
+ARM_OBJCOPY :=  $(TOOLCHAIN_PATH)/arm-none-eabi-objcopy
+ARM_OBJDUMP :=	$(TOOLCHAIN_PATH)/arm-none-eabi-objdump
+ARM_SIZE	:=	$(TOOLCHAIN_PATH)/arm-none-eabi-size
 
 # toolchains for beagleboneblack
 BBONE_CXX     :=  arm-linux-gnueabihf-g++
