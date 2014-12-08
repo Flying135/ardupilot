@@ -374,6 +374,39 @@ static void Log_Write_Sonar()
     DataFlash.WriteBlock(&pkt, sizeof(pkt));
 }
 
+struct PACKED log_Optflow {
+    LOG_PACKET_HEADER;
+    uint32_t time_ms;
+    uint8_t surface_quality;
+    float flow_x;
+    float flow_y;
+    float body_x;
+    float body_y;
+};
+
+#if OPTFLOW == ENABLED
+// Write an optical flow packet
+static void Log_Write_Optflow()
+{
+    // exit immediately if not enabled
+    if (!optflow.enabled()) {
+        return;
+    }
+    const Vector2f &flowRate = optflow.flowRate();
+    const Vector2f &bodyRate = optflow.bodyRate();
+    struct log_Optflow pkt = {
+        LOG_PACKET_HEADER_INIT(LOG_OPTFLOW_MSG),
+        time_ms         : hal.scheduler->millis(),
+        surface_quality : optflow.quality(),
+        flow_x           : flowRate.x,
+        flow_y           : flowRate.y,
+        body_x           : bodyRate.x,
+        body_y           : bodyRate.y
+    };
+    DataFlash.WriteBlock(&pkt, sizeof(pkt));
+}
+#endif
+
 struct PACKED log_Current {
     LOG_PACKET_HEADER;
     uint32_t time_ms;
@@ -512,6 +545,8 @@ struct PACKED log_AIRSPEED {
     float   airspeed;
     float   diffpressure;
     int16_t temperature;
+    float   rawpressure;
+    float   offset;
 };
 
 // Write a AIRSPEED packet
@@ -526,7 +561,9 @@ static void Log_Write_Airspeed(void)
         timestamp     : hal.scheduler->millis(),
         airspeed      : airspeed.get_raw_airspeed(),
         diffpressure  : airspeed.get_differential_pressure(),
-        temperature   : (int16_t)(temperature * 100.0f)
+        temperature   : (int16_t)(temperature * 100.0f),
+        rawpressure   : airspeed.get_raw_pressure(),
+        offset        : airspeed.get_offset()
     };
     DataFlash.WriteBlock(&pkt, sizeof(pkt));
 }
@@ -556,9 +593,13 @@ static const struct LogStructure log_structure[] PROGMEM = {
     { LOG_ARM_DISARM_MSG, sizeof(log_Arm_Disarm),
       "ARM", "IHB", "TimeMS,ArmState,ArmChecks" },
     { LOG_AIRSPEED_MSG, sizeof(log_AIRSPEED),
-      "ARSP",  "Iffc",     "TimeMS,Airspeed,DiffPress,Temp" },
+      "ARSP",  "Iffcff",   "TimeMS,Airspeed,DiffPress,Temp,RawPress,Offset" },
     { LOG_ATRP_MSG, sizeof(AP_AutoTune::log_ATRP),
       "ATRP", "IBBcfff",  "TimeMS,Type,State,Servo,Demanded,Achieved,P" },
+#if OPTFLOW == ENABLED
+    { LOG_OPTFLOW_MSG, sizeof(log_Optflow),
+      "OF",   "IBffff",   "TimeMS,Qual,flowX,flowY,bodyX,bodyY" },
+#endif
     TECS_LOG_FORMAT(LOG_TECS_MSG)
 };
 
@@ -610,6 +651,9 @@ static void Log_Write_IMU() {}
 static void Log_Write_RC() {}
 static void Log_Write_Airspeed(void) {}
 static void Log_Write_Baro(void) {}
+#if OPTFLOW == ENABLED
+static void Log_Write_Optflow() {}
+#endif
 
 static int8_t process_logs(uint8_t argc, const Menu::arg *argv) {
     return 0;
