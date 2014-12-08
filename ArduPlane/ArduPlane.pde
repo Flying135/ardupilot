@@ -1,6 +1,6 @@
 /// -*- tab-width: 4; Mode: C++; c-basic-offset: 4; indent-tabs-mode: nil -*-
 
-#define THISFIRMWARE "ArduPlane V3.1.2beta1"
+#define THISFIRMWARE "ArduPlane V3.2.1alpha"
 /*
    Lead developer: Andrew Tridgell
  
@@ -84,6 +84,8 @@
 #include <AP_ServoRelayEvents.h>
 
 #include <AP_Rally.h>
+
+#include <AP_OpticalFlow.h>     // Optical Flow library
 
 // Pre-AP_HAL compatibility
 #include "compat.h"
@@ -311,6 +313,13 @@ static AP_ServoRelayEvents ServoRelayEvents(relay);
 static AP_Camera camera(&relay);
 #endif
 
+////////////////////////////////////////////////////////////////////////////////
+// Optical flow sensor
+////////////////////////////////////////////////////////////////////////////////
+#if  CONFIG_HAL_BOARD == HAL_BOARD_PX4
+static AP_OpticalFlow_PX4 optflow(ahrs);
+#endif
+
 //Rally Ponints
 AP_Rally rally(ahrs);
 
@@ -374,8 +383,6 @@ static struct {
 // Failsafe
 ////////////////////////////////////////////////////////////////////////////////
 static struct {
-    // A flag if GCS joystick control is in use
-    uint8_t rc_override_active:1;
 
     // Used to track if the value on channel 3 (throtttle) has fallen below the failsafe threshold
     // RC receiver should be set up to output a low throttle value when signal is lost
@@ -598,6 +605,13 @@ static int32_t nav_roll_cd;
 // The instantaneous desired pitch angle.  Hundredths of a degree
 static int32_t nav_pitch_cd;
 
+// the aerodymamic load factor. This is calculated from the demanded
+// roll before the roll is clipped, using 1/sqrt(cos(nav_roll))
+static float aerodynamic_load_factor = 1.0f;
+
+// a smoothed airspeed estimate, used for limiting roll angle
+static float smoothed_airspeed;
+
 ////////////////////////////////////////////////////////////////////////////////
 // Mission library
 ////////////////////////////////////////////////////////////////////////////////
@@ -794,6 +808,9 @@ static const AP_Scheduler::Task scheduler_tasks[] PROGMEM = {
     { barometer_accumulate,   1,    900 },
     { update_notify,          1,    300 },
     { read_rangefinder,       1,    500 },
+#if OPTFLOW == ENABLED
+    { update_optical_flow,    1,    500 },
+#endif
     { one_second_loop,       50,   1000 },
     { check_long_failsafe,   15,   1000 },
     { read_receiver_rssi,     5,   1000 },
@@ -1324,6 +1341,7 @@ static void update_flight_mode(void)
         // set nav_roll and nav_pitch using sticks
         nav_roll_cd  = channel_roll->norm_input() * roll_limit_cd;
         nav_roll_cd = constrain_int32(nav_roll_cd, -roll_limit_cd, roll_limit_cd);
+        update_load_factor();
         float pitch_input = channel_pitch->norm_input();
         if (pitch_input > 0) {
             nav_pitch_cd = pitch_input * aparm.pitch_limit_max_cd;
@@ -1357,6 +1375,8 @@ static void update_flight_mode(void)
     case FLY_BY_WIRE_B:
         // Thanks to Yury MonZon for the altitude limit code!
         nav_roll_cd = channel_roll->norm_input() * roll_limit_cd;
+        nav_roll_cd = constrain_int32(nav_roll_cd, -roll_limit_cd, roll_limit_cd);
+        update_load_factor();
         update_fbwb_speed_height();
         break;
         
@@ -1374,6 +1394,8 @@ static void update_flight_mode(void)
         
         if (!cruise_state.locked_heading) {
             nav_roll_cd = channel_roll->norm_input() * roll_limit_cd;
+            nav_roll_cd = constrain_int32(nav_roll_cd, -roll_limit_cd, roll_limit_cd);
+            update_load_factor();
         } else {
             calc_nav_roll();
         }
@@ -1392,6 +1414,7 @@ static void update_flight_mode(void)
         // holding altitude at the altitude we set when we
         // switched into the mode
         nav_roll_cd  = roll_limit_cd / 3;
+        update_load_factor();
         calc_nav_pitch();
         calc_throttle();
         break;
@@ -1527,7 +1550,8 @@ static void update_flight_stage(void)
                                                  flight_stage,
                                                  auto_state.takeoff_pitch_cd,
                                                  throttle_nudge,
-                                                 relative_altitude());
+                                                 relative_altitude(),
+                                                 aerodynamic_load_factor);
         if (should_log(MASK_LOG_TECS)) {
             Log_Write_TECS_Tuning();
         }
@@ -1537,4 +1561,31 @@ static void update_flight_stage(void)
     airspeed.set_EAS2TAS(barometer.get_EAS2TAS());
 }
 
+#if OPTFLOW == ENABLED
+// called at 50hz
+static void update_optical_flow(void)
+{
+    static uint32_t last_of_update = 0;
+
+    // exit immediately if not enabled
+    if (!optflow.enabled()) {
+        return;
+    }
+
+    // read from sensor
+    optflow.update();
+
+    // write to log and send to EKF if new data has arrived
+    if (optflow.last_update() != last_of_update) {
+        last_of_update = optflow.last_update();
+        uint8_t flowQuality = optflow.quality();
+        Vector2f flowRate = optflow.flowRate();
+        Vector2f bodyRate = optflow.bodyRate();
+        // Use range from a separate range finder if available, not the PX4Flows built in sensor which is ineffective
+        float ground_distance_m = 0.01f*rangefinder.distance_cm();
+        ahrs.writeOptFlowMeas(flowQuality, flowRate, bodyRate, last_of_update, rangefinder_state.in_range_count, ground_distance_m);
+        Log_Write_Optflow();
+    }
+}
+#endif
 AP_HAL_MAIN();

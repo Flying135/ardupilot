@@ -85,7 +85,7 @@ public:
     bool            init();
     uint8_t         read();
     float           get_pressure(); // in mbar*100 units
-    float           get_temperature(); // in celsius degrees
+    float           get_temperature() const; // in celsius degrees
 
     /* Serial port drivers to pass to "init". */
     static AP_Baro_MS5611_SPI spi;

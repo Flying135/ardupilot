@@ -50,7 +50,8 @@ public:
                                enum FlightStage flight_stage,
                                int32_t ptchMinCO_cd,
                                int16_t throttle_nudge,
-							   float hgt_afe);
+							   float hgt_afe,
+							   float load_factor);
 
 	// demanded throttle in percentage
 	// should return 0 to 100
@@ -116,6 +117,7 @@ private:
     AP_Float _timeConst;
     AP_Float _landTimeConst;
     AP_Float _ptchDamp;
+    AP_Float _landDamp;
     AP_Float _thrDamp;
     AP_Float _integGain;
     AP_Float _vertAccLim;
@@ -185,6 +187,7 @@ private:
     float _hgt_dem_adj_last;
     float _hgt_rate_dem;
 	float _hgt_dem_prev;
+    float _land_hgt_dem;
 
     // Speed demand after application of rate limiting
     // This is the demand tracked by the TECS control loops
@@ -241,7 +244,7 @@ private:
 	uint8_t _flare_counter;
 
     // Update the airspeed internal state using a second order complementary filter
-    void _update_speed(void);
+    void _update_speed(float load_factor);
 
     // Update the demanded airspeed
     void _update_speed_demand(void);

@@ -191,6 +191,7 @@ void AC_WPNav::loiter_soften_for_landing()
 void AC_WPNav::set_loiter_velocity(float velocity_cms)
 {
     // range check velocity and update position controller
+    //float maxSpd_cms = _ahrs.getSpeedlimit();
     if (velocity_cms >= WPNAV_LOITER_SPEED_MIN) {
         _loiter_speed_cms = velocity_cms;
 
@@ -219,7 +220,7 @@ void AC_WPNav::get_loiter_stopping_point_xy(Vector3f& stopping_point) const
 
 /// calc_loiter_desired_velocity - updates desired velocity (i.e. feed forward) with pilot requested acceleration and fake wind resistance
 ///		updated velocity sent directly to position controller
-void AC_WPNav::calc_loiter_desired_velocity(float nav_dt)
+void AC_WPNav::calc_loiter_desired_velocity(float nav_dt, float ekfGndSpdLimit)
 {
     // range check nav_dt
     if( nav_dt < 0 ) {
@@ -276,6 +277,15 @@ void AC_WPNav::calc_loiter_desired_velocity(float nav_dt)
         }
     }
 
+    // limit EKF speed limit and convert to cm/s
+    ekfGndSpdLimit = 100.0f * max(ekfGndSpdLimit,0.1f);
+    // Apply EKF limit to desired velocity -  this limit is calculated by the EKF and adjusted as required to ensure certain sensor limits are respected (eg optical flow sensing)
+    float horizSpdDem = sqrtf(sq(desired_vel.x) + sq(desired_vel.y));
+    if (horizSpdDem > ekfGndSpdLimit) {
+        desired_vel.x = desired_vel.x * ekfGndSpdLimit / horizSpdDem;
+        desired_vel.y = desired_vel.y * ekfGndSpdLimit / horizSpdDem;
+    }
+
     // send adjusted feed forward velocity back to position controller
     _pos_control.set_desired_velocity_xy(desired_vel.x,desired_vel.y);
 }
@@ -287,7 +297,7 @@ int32_t AC_WPNav::get_loiter_bearing_to_target() const
 }
 
 /// update_loiter - run the loiter controller - should be called at 100hz
-void AC_WPNav::update_loiter()
+void AC_WPNav::update_loiter(float ekfGndSpdLimit, float ekfNavVelGainScaler)
 {
     // calculate dt
     uint32_t now = hal.scheduler->millis();
@@ -302,12 +312,12 @@ void AC_WPNav::update_loiter()
         // capture time since last iteration
         _loiter_last_update = now;
         // translate any adjustments from pilot to loiter target
-        calc_loiter_desired_velocity(dt);
+        calc_loiter_desired_velocity(dt,ekfGndSpdLimit);
         // trigger position controller on next update
         _pos_control.trigger_xy();
     }else{
         // run horizontal position controller
-        _pos_control.update_xy_controller(true);
+        _pos_control.update_xy_controller(true, ekfNavVelGainScaler);
     }
 }
 
@@ -617,7 +627,7 @@ void AC_WPNav::update_wpnav()
         _pos_control.freeze_ff_z();
     }else{
         // run horizontal position controller
-        _pos_control.update_xy_controller(false);
+        _pos_control.update_xy_controller(false, 1.0f);
 
         // check if leash lengths need updating
         check_wp_leash_length();
@@ -802,6 +812,55 @@ void AC_WPNav::set_spline_origin_and_destination(const Vector3f& origin, const V
     _flags.new_wp_destination = true;   // flag new waypoint so we can freeze the pos controller's feed forward and smooth the transition
 }
 
+void AC_WPNav::set_spline_dest_and_vel(const Vector3f& dest_pos, const Vector3f& dest_vel)
+{
+    // check _wp_accel_cms is reasonable to avoid divide by zero
+    if (_wp_accel_cms <= 0) {
+        _wp_accel_cms.set_and_save(WPNAV_ACCELERATION);
+    }
+
+    _spline_time = 0.0f;
+
+    _origin = _inav.get_position();
+    _destination = dest_pos;
+    _spline_origin_vel = _inav.get_velocity();
+    _spline_destination_vel = dest_vel;
+
+    if(_spline_origin_vel.length() < 100.0f) {
+        _spline_origin_vel = (_destination - _origin) * 0.1f;
+    }
+
+    _spline_vel_scaler = _spline_origin_vel.length();
+
+    _flags.fast_waypoint = _spline_destination_vel.length() > 0.0f;
+
+    float vel_len = (_spline_origin_vel + _spline_destination_vel).length();
+    float pos_len = (_destination - _origin).length() * 4.0f;
+
+    if (vel_len > pos_len) {
+        // if total start+stop velocity is more than twice position difference
+        // use a scaled down start and stop velocityscale the  start and stop velocities down
+        float vel_scaling = pos_len / vel_len;
+        // update spline calculator
+        update_spline_solution(_origin, _destination, _spline_origin_vel * vel_scaling, _spline_destination_vel * vel_scaling);
+    }else{
+        // update spline calculator
+        update_spline_solution(_origin, _destination, _spline_origin_vel, _spline_destination_vel);
+    }
+
+    // initialise yaw heading to current heading
+    _yaw = _attitude_control.angle_ef_targets().z;
+
+    // calculate slow down distance
+    calc_slow_down_distance(_wp_speed_cms, _wp_accel_cms);
+
+    // initialise intermediate point to the origin
+    _pos_control.set_pos_target(_origin);
+    _flags.reached_destination = false;
+    _flags.segment_type = SEGMENT_SPLINE;
+    _flags.new_wp_destination = true;   // flag new waypoint so we can freeze the pos controller's feed forward and smooth the transition
+}
+
 /// update_spline - update spline controller
 void AC_WPNav::update_spline()
 {
@@ -833,7 +892,7 @@ void AC_WPNav::update_spline()
         _pos_control.freeze_ff_z();
     }else{
         // run horizontal position controller
-        _pos_control.update_xy_controller(false);
+        _pos_control.update_xy_controller(false, 1.0f);
     }
 }
 
