@@ -298,7 +298,7 @@
  # define FAILSAFE_GPS_TIMEOUT_MS       5000    // gps failsafe triggers after 5 seconds with no GPS
 #endif
 #ifndef GPS_HDOP_GOOD_DEFAULT
- # define GPS_HDOP_GOOD_DEFAULT         200     // minimum hdop that represents a good position.  used during pre-arm checks if fence is enabled
+ # define GPS_HDOP_GOOD_DEFAULT         230     // minimum hdop that represents a good position.  used during pre-arm checks if fence is enabled
 #endif
 
 // GCS failsafe
@@ -528,10 +528,6 @@
 //
 #ifndef MOUNT
  # define MOUNT         ENABLED
-#endif
-
-#ifndef MOUNT2
- # define MOUNT2         DISABLED
 #endif
 
 
@@ -793,6 +789,7 @@
     MASK_LOG_CMD | \
     MASK_LOG_CURRENT | \
     MASK_LOG_RCOUT | \
+    MASK_LOG_OPTFLOW | \
     MASK_LOG_COMPASS | \
     MASK_LOG_CAMERA
 #endif
