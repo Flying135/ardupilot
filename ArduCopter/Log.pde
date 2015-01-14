@@ -261,10 +261,10 @@ static void Log_Write_Optflow()
         LOG_PACKET_HEADER_INIT(LOG_OPTFLOW_MSG),
         time_ms         : hal.scheduler->millis(),
         surface_quality : optflow.quality(),
-        flow_x           : flowRate.x,
-        flow_y           : flowRate.y,
-        body_x           : bodyRate.x,
-        body_y           : bodyRate.y
+        flow_x          : flowRate.x,
+        flow_y          : flowRate.y,
+        body_x          : bodyRate.x,
+        body_y          : bodyRate.y
     };
     DataFlash.WriteBlock(&pkt, sizeof(pkt));
  #endif     // OPTFLOW == ENABLED
@@ -491,7 +491,11 @@ static void Log_Write_Attitude()
     DataFlash.WriteBlock(&pkt, sizeof(pkt));
 
 #if AP_AHRS_NAVEKF_AVAILABLE
-    DataFlash.Log_Write_EKF(ahrs);
+ #if OPTFLOW == ENABLED
+    DataFlash.Log_Write_EKF(ahrs,optflow.enabled());
+ #else
+    DataFlash.Log_Write_EKF(ahrs,false);
+ #endif
     DataFlash.Log_Write_AHRS2(ahrs);
 #endif
 #if CONFIG_HAL_BOARD == HAL_BOARD_AVR_SITL
