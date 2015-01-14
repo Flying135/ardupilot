@@ -1,7 +1,4 @@
 /*
-
-   Inspired by work done here https://github.com/PX4/Firmware/tree/master/src/drivers/frsky_telemetry from Stefan Rado <px4@sradonia.net>
-
    This program is free software: you can redistribute it and/or modify
    it under the terms of the GNU General Public License as published by
    the Free Software Foundation, either version 3 of the License, or
@@ -14,12 +11,6 @@
 
    You should have received a copy of the GNU General Public License
    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-*/
-
-/* 
-   FRSKY Telemetry library
-   for the moment it only handle hub port telemetry
-   the sport reference are only here to simulate the frsky module and use opentx simulator. it will eventually be removed
 */
 
 #include "AP_ST24_Telem.h"

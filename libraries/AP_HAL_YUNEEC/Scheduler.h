@@ -4,7 +4,7 @@
 
 #include <AP_HAL_YUNEEC.h>
 
-#define YUNEEC_SCHEDULER_MAX_TIMER_PROCS 5
+#define YUNEEC_SCHEDULER_MAX_TIMER_PROCS 6
 
 typedef void (*voidFuncPtr)(void);
 

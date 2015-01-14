@@ -63,6 +63,7 @@ void HAL_YUNEEC::init(int argc,char* const argv[]) const {
      * Scheduler should likely come first. */
     scheduler->init(NULL);
     console->begin(115200);
+    console->set_blocking_writes(false);
 //    rcin->init(NULL);
     rcout->init(NULL);
     analogin->init(NULL);
@@ -70,7 +71,6 @@ void HAL_YUNEEC::init(int argc,char* const argv[]) const {
     i2c->setTimeout(2);
     i2c2->begin();
     i2c2->setTimeout(2);
-	spi->init(NULL);
     storage->init(NULL);
 }
 

@@ -3,10 +3,12 @@
 /*-----------------------------------------------------------------------*/
 #include <AP_HAL.h>
 #include <AP_HAL_YUNEEC.h>
-#include "diskio.h"
+#include <diskio.h>
 #include "fatfs_sd.h"
 
 extern const AP_HAL::HAL& hal;
+
+#define FATFS_DEBUG_SEND_USART(x) 		//hal.console->printf(x); hal.console->println();
 
 /* MMC/SD command */
 #define CMD0	(0)			/* GO_IDLE_STATE */
@@ -34,22 +36,17 @@ static volatile DSTATUS TM_FATFS_SD_Stat = STA_NOINIT;	/* Physical drive status 
 
 static BYTE TM_FATFS_SD_CardType;			/* Card type flags */
 
-static YUNEEC::YUNEECSPIDeviceDriver* _spi;
-static YUNEEC::YUNEECSemaphore* _spi_sem;
+static AP_HAL::SPIDeviceDriver *_spi;
 
 /* Initialize MMC interface */
 static void init_spi (void) {
+	// init spi bus
+	hal.spi->init(NULL);
 	// get spi driver class
     _spi = hal.spi->device(AP_HAL::SPIDevice_Dataflash);
     if (_spi == NULL) {
         hal.scheduler->panic(
                 PSTR("PANIC: DataFlash SPIDeviceDriver not found"));
-        return; /* never reached */
-    }
-    _spi_sem = _spi->get_semaphore();
-    if (_spi_sem == NULL) {
-        hal.scheduler->panic(
-                PSTR("PANIC: DataFlash SPIDeviceDriver semaphore is null"));
         return; /* never reached */
     }
 
@@ -59,11 +56,11 @@ static void init_spi (void) {
 
 
 /* Exchange a byte */
-static BYTE xchg_spi (
+static inline BYTE xchg_spi (
 	BYTE dat	/* Data to send */
 )
 {
-	return spi->transfer(dat);
+	return _spi->transfer(dat);
 }
 
 
@@ -74,9 +71,11 @@ static void rcvr_spi_multi (
 )
 {
 	uint16_t i;
+	FATFS_DEBUG_SEND_USART("rcvr_spi_multi: inside");
 	for (i = 0; i < btr; i++) {
-		buff[i] = spi->transfer(0xff);;
+		buff[i] = _spi->transfer(0xff);
 	}
+	FATFS_DEBUG_SEND_USART("rcvr_spi_multi: done");
 }
 
 
@@ -88,9 +87,11 @@ static void xmit_spi_multi (
 )
 {
 	uint16_t i;
-	for (i = 0; i < btr; i++) {
-		spi->transfer(buff[i]);
+	FATFS_DEBUG_SEND_USART("xmit_spi_multi: inside");
+	for (i = 0; i < btx; i++) {
+		_spi->transfer(buff[i]);
 	}
+	FATFS_DEBUG_SEND_USART("xmit_spi_multi: done");
 }
 #endif
 
@@ -107,8 +108,14 @@ static int wait_ready (	/* 1:Ready, 0:Timeout */
 	uint32_t start = hal.scheduler->millis();
 
 	do {
-		d = xchg_spi(0xFF);
-	} while (d != 0xFF && (hal.scheduler->millis() - start < wt));	/* Wait for card goes ready or timeout */
+		d = _spi->transfer(0xff);
+	} while (d != 0xFF && ( (hal.scheduler->millis() - start) < wt ));	/* Wait for card goes ready or timeout */
+
+	if (d == 0xFF) {
+		FATFS_DEBUG_SEND_USART("wait_ready: OK");
+	} else {
+		FATFS_DEBUG_SEND_USART("wait_ready: timeout");
+	}
 
 	return (d == 0xFF) ? 1 : 0;
 }
@@ -123,6 +130,7 @@ static void deselect (void)
 {
 	_spi->cs_release();		/* CS = H */
 	xchg_spi(0xFF);			/* Dummy clock (force DO hi-z for multiple slave SPI) */
+	FATFS_DEBUG_SEND_USART("deselect: ok");
 }
 
 
@@ -137,8 +145,10 @@ static int select (void)	/* 1:OK, 0:Timeout */
 	xchg_spi(0xFF);	/* Dummy clock (force DO enabled) */
 
 	if (wait_ready(500)) {
+		FATFS_DEBUG_SEND_USART("select: OK");
 		return 1;	/* OK */
 	}
+	FATFS_DEBUG_SEND_USART("select: no");
 	deselect();
 	return 0;	/* Timeout */
 }
@@ -157,14 +167,12 @@ static int rcvr_datablock (	/* 1:OK, 0:Error */
 	BYTE token;
 	
 	FATFS_DEBUG_SEND_USART("rcvr_datablock: inside");
-	
-	//Timer1 = 200;
-	
-	TM_DELAY_SetTime2(200000);
+
+	uint32_t start = hal.scheduler->micros();
 	do {							// Wait for DataStart token in timeout of 200ms 
 		token = xchg_spi(0xFF);
-		// This loop will take a time. Insert rot_rdq() here for multitask envilonment. 
-	} while ((token == 0xFF) && TM_DELAY_Time2());
+		// This loop will take a time. Insert rot_rdq() here for multi-task environment.
+	} while ((token == 0xFF) && ( (hal.scheduler->micros() - start) < 200000));
 	if (token != 0xFE) {
 		FATFS_DEBUG_SEND_USART("rcvr_datablock: token != 0xFE");
 		return 0;		// Function fails if invalid DataStart token or timeout 
@@ -263,59 +271,24 @@ static BYTE send_cmd (		/* Return value: R1 resp (bit7==1:Failed to send) */
 	return res;							/* Return received response */
 }
 
-void TM_FATFS_InitPins(void) {
+
+static inline void TM_FATFS_InitPins(void) {
 	GPIO_InitTypeDef GPIO_InitStruct;
-	
-	RCC_AHB1PeriphClockCmd(FATFS_CS_RCC, ENABLE);	
-	
-	GPIO_InitStruct.GPIO_Pin = FATFS_CS_PIN;
-	GPIO_InitStruct.GPIO_Mode = GPIO_Mode_OUT;
-	GPIO_InitStruct.GPIO_OType = GPIO_OType_PP;
-	GPIO_InitStruct.GPIO_PuPd = GPIO_PuPd_DOWN;
-	GPIO_InitStruct.GPIO_Speed = GPIO_Speed_100MHz;
-	
-	GPIO_Init(FATFS_CS_PORT, &GPIO_InitStruct);
-	
-#if FATFS_USE_DETECT_PIN > 0
-	RCC_AHB1PeriphClockCmd(FATFS_USE_DETECT_PIN_RCC, ENABLE);
-	
+
+	RCC->AHB1ENR |= FATFS_USE_DETECT_PIN_RCC;
+
 	GPIO_InitStruct.GPIO_Pin = FATFS_USE_DETECT_PIN_PIN;
 	GPIO_InitStruct.GPIO_Mode = GPIO_Mode_IN;
 	GPIO_InitStruct.GPIO_OType = GPIO_OType_PP;
-	GPIO_InitStruct.GPIO_PuPd = GPIO_PuPd_UP;
+	GPIO_InitStruct.GPIO_PuPd = GPIO_PuPd_NOPULL;
 	GPIO_InitStruct.GPIO_Speed = GPIO_Speed_100MHz;
 	
 	GPIO_Init(FATFS_USE_DETECT_PIN_PORT, &GPIO_InitStruct);
-#endif
-
-#if FATFS_USE_WRITEPROTECT_PIN > 0
-	RCC_AHB1PeriphClockCmd(FATFS_USE_WRITEPROTECT_PIN_RCC, ENABLE);
-	
-	GPIO_InitStruct.GPIO_Pin = FATFS_USE_WRITEPROTECT_PIN_PIN;
-	GPIO_InitStruct.GPIO_Mode = GPIO_Mode_IN;
-	GPIO_InitStruct.GPIO_OType = GPIO_OType_PP;
-	GPIO_InitStruct.GPIO_PuPd = GPIO_PuPd_UP;
-	GPIO_InitStruct.GPIO_Speed = GPIO_Speed_100MHz;
-	
-	GPIO_Init(FATFS_USE_WRITEPROTECT_PIN_PORT, &GPIO_InitStruct);
-#endif
 }
 
 
-uint8_t TM_FATFS_Detect(void) {
-#if FATFS_USE_DETECT_PIN > 0
-	return GPIO_ReadInputDataBit(FATFS_USE_DETECT_PIN_PORT, FATFS_USE_DETECT_PIN_PIN) == Bit_RESET;
-#else
-	return 1;
-#endif
-}
-
-uint8_t TM_FATFS_WriteEnabled(void) {
-#if FATFS_USE_WRITEPROTECT_PIN > 0
-	return GPIO_ReadInputDataBit(FATFS_USE_WRITEPROTECT_PIN_PORT, FATFS_USE_WRITEPROTECT_PIN_PIN) == Bit_RESET;
-#else
-	return 1;
-#endif	
+static inline uint8_t TM_FATFS_Detect(void) {
+	return !(FATFS_USE_DETECT_PIN_PORT->IDR & FATFS_USE_DETECT_PIN_PIN);
 }
 
 
@@ -324,26 +297,30 @@ DSTATUS TM_FATFS_SD_disk_initialize (void) {
 
 	FATFS_DEBUG_SEND_USART("disk_initialize: inside");
 	
-	//Initialize CS pin
+	// Initialize CS pin
 	TM_FATFS_InitPins();
+	// Initialize SPI, then delay 10ms
 	init_spi();
-	
+
 	if (!TM_FATFS_Detect()) {
 		return STA_NODISK;
 	}
+
+	// to set up SD card in a low SPI speed between 100kHz and 400kHz
+    _spi->set_bus_speed(AP_HAL::SPIDeviceDriver::SPI_SPEED_LOW);
+    // send 80 dummy clocks
 	for (n = 10; n; n--) {
 		xchg_spi(0xFF);
 	}
 	ty = 0;
 	if (send_cmd(CMD0, 0) == 1) {				/* Put the card SPI/Idle state */
 		FATFS_DEBUG_SEND_USART("disk_initialize: CMD0 = 1");
-		//Timer1 = 1000;						/* Initialization timeout = 1 sec */
-		TM_DELAY_SetTime2(1000000);
-		if (send_cmd(CMD8, 0x1AA) == 1) {	/* SDv2? */
+		uint32_t start = hal.scheduler->millis();	/* Initialization timeout = 1 sec */
+		if (send_cmd(CMD8, 0x1AA) == 1) {			/* SDv2? */
 			for (n = 0; n < 4; n++) ocr[n] = xchg_spi(0xFF);	/* Get 32 bit return value of R7 resp */
 			if (ocr[2] == 0x01 && ocr[3] == 0xAA) {				/* Is the card supports vcc of 2.7-3.6V? */
-				while (TM_DELAY_Time2() && send_cmd(ACMD41, 1UL << 30)) ;	/* Wait for end of initialization with ACMD41(HCS) */
-				if (TM_DELAY_Time2() && send_cmd(CMD58, 0) == 0) {		/* Check CCS bit in the OCR */
+				while (((hal.scheduler->millis() - start) < 1000000) && send_cmd(ACMD41, 1UL << 30)) ;	/* Wait for end of initialization with ACMD41(HCS) */
+				if (((hal.scheduler->millis() - start) < 1000000) && (send_cmd(CMD58, 0) == 0)) {		/* Check CCS bit in the OCR */
 					for (n = 0; n < 4; n++) {
 						ocr[n] = xchg_spi(0xFF);
 					}
@@ -356,8 +333,8 @@ DSTATUS TM_FATFS_SD_disk_initialize (void) {
 			} else {
 				ty = CT_MMC; cmd = CMD1;	/* MMCv3 (CMD1(0)) */
 			}
-			while (TM_DELAY_Time2() && send_cmd(cmd, 0));			/* Wait for end of initialization */
-			if (TM_DELAY_Time2() || send_cmd(CMD16, 512) != 0) {	/* Set block length: 512 */
+			while (((hal.scheduler->millis() - start) < 1000000) && send_cmd(cmd, 0));			/* Wait for end of initialization */
+			if (((hal.scheduler->millis() - start) < 1000000) || send_cmd(CMD16, 512) != 0) {	/* Set block length: 512 */
 				ty = 0;
 			}
 		}
@@ -367,15 +344,13 @@ DSTATUS TM_FATFS_SD_disk_initialize (void) {
 	deselect();
 
 	if (ty) {			/* OK */
+		FATFS_DEBUG_SEND_USART("disk_initialize: Success");
+		// set SPI speed as fast as possible to maximize the read/write performance
+	    _spi->set_bus_speed(AP_HAL::SPIDeviceDriver::SPI_SPEED_HIGH);
 		TM_FATFS_SD_Stat &= ~STA_NOINIT;	/* Clear STA_NOINIT flag */
 	} else {			/* Failed */
+		FATFS_DEBUG_SEND_USART("disk_initialize: Failed");
 		TM_FATFS_SD_Stat = STA_NOINIT;
-	}
-
-	if (!TM_FATFS_WriteEnabled()) {
-		TM_FATFS_SD_Stat |= STA_PROTECT;
-	} else {
-		TM_FATFS_SD_Stat &= ~STA_PROTECT;
 	}
 	
 	return TM_FATFS_SD_Stat;
@@ -393,12 +368,6 @@ DSTATUS TM_FATFS_SD_disk_status (void) {
 	if (!TM_FATFS_Detect()) {
 		FATFS_DEBUG_SEND_USART("not detected");
 		return STA_NOINIT;
-	}
-	
-	if (!TM_FATFS_WriteEnabled()) {
-		TM_FATFS_SD_Stat |= STA_PROTECT;
-	} else {
-		TM_FATFS_SD_Stat &= ~STA_PROTECT;
 	}
 	
 	return TM_FATFS_SD_Stat;	/* Return disk status */
@@ -461,10 +430,6 @@ DRESULT TM_FATFS_SD_disk_write (
 	FATFS_DEBUG_SEND_USART("disk_write: inside");
 	if (!TM_FATFS_Detect()) {
 		return RES_ERROR;
-	}
-	if (!TM_FATFS_WriteEnabled()) {
-		FATFS_DEBUG_SEND_USART("disk_write: Write protected!!! \n---------------------------------------------");
-		return RES_WRPRT;
 	}
 	if (TM_FATFS_SD_Stat & STA_NOINIT) {
 		return RES_NOTRDY;	/* Check drive status */
@@ -570,7 +535,7 @@ DRESULT TM_FATFS_SD_disk_ioctl (
 		if (!(TM_FATFS_SD_CardType & CT_SDC)) break;				/* Check if the card is SDC */
 		if (TM_FATFS_SD_disk_ioctl(MMC_GET_CSD, csd)) break;	/* Get CSD */
 		if (!(csd[0] >> 6) && !(csd[10] & 0x40)) break;	/* Check if sector erase can be applied to the card */
-		dp = buff; st = dp[0]; ed = dp[1];				/* Load sector block */
+		dp = (DWORD *)buff; st = dp[0]; ed = dp[1];				/* Load sector block */
 		if (!(TM_FATFS_SD_CardType & CT_BLOCK)) {
 			st *= 512; ed *= 512;
 		}

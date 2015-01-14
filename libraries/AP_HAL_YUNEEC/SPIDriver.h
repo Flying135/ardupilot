@@ -15,8 +15,10 @@ public:
     void cs_release();
     uint8_t transfer (uint8_t data);
     void transfer (const uint8_t *data, uint16_t len);
+    void set_bus_speed(enum bus_speed speed);
 private:
     YUNEECSemaphore _semaphore;
+    enum bus_speed _last_speed;
 };
 
 class YUNEEC::YUNEECSPIDeviceManager : public AP_HAL::SPIDeviceManager {

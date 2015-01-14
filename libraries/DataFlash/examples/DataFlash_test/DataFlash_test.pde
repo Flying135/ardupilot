@@ -10,7 +10,7 @@
 #include <AP_HAL_AVR_SITL.h>
 #include <AP_HAL_Empty.h>
 #include <AP_HAL_PX4.h>
-
+#include <AP_HAL_YUNEEC.h>
 #include <AP_Common.h>
 #include <AP_Param.h>
 #include <AP_Progmem.h>
@@ -43,6 +43,8 @@ const AP_HAL::HAL& hal = AP_HAL_BOARD_DRIVER;
 DataFlash_APM2 DataFlash;
 #elif CONFIG_HAL_BOARD == HAL_BOARD_APM1
 DataFlash_APM1 DataFlash;
+#elif CONFIG_HAL_BOARD == HAL_BOARD_YUNEEC
+DataFlash_YUNEEC_File DataFlash(HAL_BOARD_LOG_DIRECTORY);
 #else
 DataFlash_Empty DataFlash;
 #endif
@@ -72,9 +74,9 @@ void setup()
     hal.console->println("Dataflash Log Test 1.0");
 
     // Test
-    hal.scheduler->delay(20);
-    DataFlash.ReadManufacturerID();
-    hal.scheduler->delay(10);
+//    hal.scheduler->delay(20);
+//    DataFlash.ReadManufacturerID();
+//    hal.scheduler->delay(10);
     DataFlash.ShowDeviceInfo(hal.console);
 
     if (DataFlash.NeedErase()) {
@@ -106,6 +108,10 @@ void setup()
             l1    : (long)i * 5000,
             l2    : (long)i * 16268
         };
+//        char *p = (char *)&pkt;
+//        for(int j = 0; j < sizeof(pkt); j++)
+//        	hal.console->printf("%d", p[j]);
+//        hal.console->printf("\n\r");
         DataFlash.WriteBlock(&pkt, sizeof(pkt));
         total_micros += hal.scheduler->micros() - start;
         hal.scheduler->delay(20);
@@ -133,6 +139,7 @@ void loop()
 	DataFlash.LogReadProcess(log_num, start, end, 
                              print_mode,
                              hal.console);
+	DataFlash.ListAvailableLogs(hal.console);
     hal.console->printf("\nTest complete.  Test will repeat in 20 seconds\n");
     hal.scheduler->delay(20000);
 }

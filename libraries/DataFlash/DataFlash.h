@@ -582,5 +582,6 @@ struct PACKED log_Esc {
 
 #include "DataFlash_Block.h"
 #include "DataFlash_File.h"
+#include "DataFlash_YUNEEC_File.h"
 
 #endif

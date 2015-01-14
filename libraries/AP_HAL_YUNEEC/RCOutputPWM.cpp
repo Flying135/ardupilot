@@ -63,7 +63,7 @@ void YUNEECRCOutputPWM::init(bool escbus_exist) {
 	TIM_TimeBaseStructure.TIM_Prescaler = TIM4_5_PRESCALER;
 	TIM_TimeBaseInit(TIM5, &TIM_TimeBaseStructure);
 
-	TIM_OCInitStructure.TIM_OCMode 			= TIM_OCMode_PWM2;
+	TIM_OCInitStructure.TIM_OCMode 			= TIM_OCMode_PWM1;
 	TIM_OCInitStructure.TIM_OutputState 	= TIM_OutputState_Disable;
 	TIM_OCInitStructure.TIM_OutputNState 	= TIM_OutputNState_Disable;
 	TIM_OCInitStructure.TIM_Pulse 			= 0;

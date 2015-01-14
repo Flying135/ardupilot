@@ -56,6 +56,8 @@ COREINCLUDES  = -I$(STMLIBDIR)/CMSIS/Include
 COREINCLUDES += -I$(STMLIBDIR)/CMSIS/Device/ST/STM32F4xx/Include
 COREINCLUDES += -I$(STMLIBDIR)/CMSIS/Device/ST/STM32F4xx/Source/Templates
 COREINCLUDES += -I$(STMLIBDIR)/STM32F4xx_StdPeriph_Driver/inc
+COREINCLUDES += -I$(LIBDIR)/fatfs
+COREINCLUDES += -I$(LIBDIR)/fatfs/option
 else
 $(error Unknown board type)
 endif
@@ -114,7 +116,6 @@ v =
 endif
 
 # Library object files
-#COREOBJS		:=	$(STMLIBDIR)/CMSIS/Device/ST/STM32F37x/Source/Templates/*.o $(STMLIBDIR)/STM32F37x_StdPeriph_Driver/src/*.o #$(STMLIBDIR)/STM32_USB-FS-Device_Driver/src/*.o
 LIBOBJS			:=	$(SKETCHLIBOBJS)
 
 ################################################################################
@@ -213,7 +214,7 @@ $(BUILDROOT)/libraries/%.o: $(SKETCHBOOK)/libraries/%.c
 $(BUILDROOT)/libraries/%.o: $(SKETCHBOOK)/libraries/%.S
 	$(RULEHDR)
 	$(v)$(AS) $(ASFLAGS) -c -o $@ $< $(SLIB_INCLUDES)
-
+	
 ###############################################################################
 # JLink as the programmer
 

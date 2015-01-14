@@ -38,54 +38,68 @@ void YUNEECSPIDeviceDriver::init() {
 	RCC->APB1ENR |= DataFlash_SPI_CLK;
     RCC->AHB1ENR |= (DataFlash_SPI_SCK_GPIO_CLK | DataFlash_SPI_MISO_GPIO_CLK | DataFlash_SPI_MOSI_GPIO_CLK | DataFlash_CS_GPIO_CLK);
 
-    /*!< Connect SPI pins to AF5 */
+    /* Connect SPI pins to AF5 */
     GPIO_PinAFConfig(DataFlash_SPI_SCK_GPIO_PORT, DataFlash_SPI_SCK_SOURCE, DataFlash_SPI_SCK_AF);
     GPIO_PinAFConfig(DataFlash_SPI_MISO_GPIO_PORT, DataFlash_SPI_MISO_SOURCE, DataFlash_SPI_MISO_AF);
     GPIO_PinAFConfig(DataFlash_SPI_MOSI_GPIO_PORT, DataFlash_SPI_MOSI_SOURCE, DataFlash_SPI_MOSI_AF);
 
     GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_AF;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
     GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-    GPIO_InitStructure.GPIO_PuPd  = GPIO_PuPd_DOWN;
+    GPIO_InitStructure.GPIO_PuPd  = GPIO_PuPd_UP;
 
-    /*!< SPI SCK pin configuration */
+    /* SPI SCK pin configuration */
     GPIO_InitStructure.GPIO_Pin = DataFlash_SPI_SCK_PIN;
     GPIO_Init(DataFlash_SPI_SCK_GPIO_PORT, &GPIO_InitStructure);
 
-    /*!< SPI MOSI pin configuration */
+    /* SPI MOSI pin configuration */
     GPIO_InitStructure.GPIO_Pin =  DataFlash_SPI_MOSI_PIN;
     GPIO_Init(DataFlash_SPI_MOSI_GPIO_PORT, &GPIO_InitStructure);
 
-    /*!< SPI MISO pin configuration */
+    /* SPI MISO pin configuration */
     GPIO_InitStructure.GPIO_Pin =  DataFlash_SPI_MISO_PIN;
     GPIO_Init(DataFlash_SPI_MISO_GPIO_PORT, &GPIO_InitStructure);
 
-    /*!< Configure sFLASH Card CS pin in output pushpull mode ********************/
+    /* Configure sFLASH Card CS pin in output pushpull mode ********************/
     GPIO_InitStructure.GPIO_Pin = DataFlash_CS_PIN;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;
     GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
     GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;
     GPIO_Init(DataFlash_CS_GPIO_PORT, &GPIO_InitStructure);
 
     /* Chip Select High */
     DataFlash_CS_GPIO_PORT->BSRRL = DataFlash_CS_PIN;
 
-    /*!< SPI configuration */
+    /* SPI configuration */
     SPI_InitStructure.SPI_Direction = SPI_Direction_2Lines_FullDuplex;
     SPI_InitStructure.SPI_Mode = SPI_Mode_Master;
     SPI_InitStructure.SPI_DataSize = SPI_DataSize_8b;
-    SPI_InitStructure.SPI_CPOL = SPI_CPOL_Low;
-    SPI_InitStructure.SPI_CPHA = SPI_CPHA_1Edge;
+    SPI_InitStructure.SPI_CPOL = SPI_CPOL_High;
+    SPI_InitStructure.SPI_CPHA = SPI_CPHA_2Edge;
     SPI_InitStructure.SPI_NSS = SPI_NSS_Soft;
-    SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_2;
+    SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_128;
 
     SPI_InitStructure.SPI_FirstBit = SPI_FirstBit_MSB;
     SPI_InitStructure.SPI_CRCPolynomial = 7;
     SPI_Init(DataFlash_SPI, &SPI_InitStructure);
 
-    /*!< Enable the DataFlash_SPI  */
-    SPI_Cmd(DataFlash_SPI, ENABLE);
+    /* Enable the DataFlash_SPI  */
+    DataFlash_SPI->CR1 |= SPI_CR1_SPE;
+    _last_speed = SPI_SPEED_LOW;
+}
+
+void YUNEECSPIDeviceDriver::set_bus_speed(enum bus_speed speed) {
+	if (_last_speed == speed)
+		return;
+	uint16_t tmpreg = DataFlash_SPI->CR1 & (uint16_t)0xFFC7;
+	if (speed == SPI_SPEED_LOW) {
+		tmpreg |= SPI_BaudRatePrescaler_128;
+	} else {
+		tmpreg |= SPI_BaudRatePrescaler_2;
+	}
+	DataFlash_SPI->CR1 = tmpreg;
+	_last_speed = speed;
 }
 
 AP_HAL::Semaphore* YUNEECSPIDeviceDriver::get_semaphore() {
