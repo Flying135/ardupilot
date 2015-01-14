@@ -51,10 +51,11 @@ AP_ADC_ADS7844 adc;
 AP_Compass_HMC5843 compass;
 
 AP_GPS gps;
-AP_Baro_HIL baro;
+AP_Baro baro;
 
 // choose which AHRS system to use
 AP_AHRS_DCM  ahrs(ins, baro, gps);
+
 
 #define HIGH 1
 #define LOW 0
