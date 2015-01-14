@@ -156,6 +156,7 @@
 #if PARACHUTE == ENABLED
 #include <AP_Parachute.h>		// Parachute release library
 #endif
+#include <AP_LandingGear.h>     // Landing Gear library
 #include <AP_Terrain.h>
 
 // AP_HAL to Arduino compatibility layer
@@ -259,21 +260,8 @@ static GPS_Glitch gps_glitch(gps);
 // flight modes convenience array
 static AP_Int8 *flight_modes = &g.flight_mode1;
 
-#if CONFIG_BARO == HAL_BARO_BMP085
-static AP_Baro_BMP085 barometer;
-#elif CONFIG_BARO == HAL_BARO_PX4
-static AP_Baro_PX4 barometer;
-#elif CONFIG_BARO == HAL_BARO_VRBRAIN
-static AP_Baro_VRBRAIN barometer;
-#elif CONFIG_BARO == HAL_BARO_HIL
-static AP_Baro_HIL barometer;
-#elif CONFIG_BARO == HAL_BARO_MS5611
-static AP_Baro_MS5611 barometer(&AP_Baro_MS5611::i2c);
-#elif CONFIG_BARO == HAL_BARO_MS5611_SPI
-static AP_Baro_MS5611 barometer(&AP_Baro_MS5611::spi);
-#else
- #error Unrecognized CONFIG_BARO setting
-#endif
+static AP_Baro barometer;
+
 static Baro_Glitch baro_glitch(barometer);
 
 #if CONFIG_COMPASS == HAL_COMPASS_PX4
@@ -284,6 +272,8 @@ static AP_Compass_VRBRAIN compass;
 static AP_Compass_HMC5843 compass;
 #elif CONFIG_COMPASS == HAL_COMPASS_HIL
 static AP_Compass_HIL compass;
+#elif CONFIG_COMPASS == HAL_COMPASS_AK8963
+static AP_Compass_AK8963_MPU9250 compass;
 #else
  #error Unrecognized CONFIG_COMPASS setting
 #endif
@@ -315,13 +305,14 @@ AP_Mission mission(ahrs, &start_command, &verify_command, &exit_mission);
 ////////////////////////////////////////////////////////////////////////////////
 // Optical flow sensor
 ////////////////////////////////////////////////////////////////////////////////
- #if OPTFLOW == ENABLED
-#if CONFIG_HAL_BOARD == HAL_BOARD_APM1 || CONFIG_HAL_BOARD == HAL_BOARD_APM2
-static AP_OpticalFlow_ADNS3080 optflow(ahrs);
-#elif CONFIG_HAL_BOARD == HAL_BOARD_PX4
-static AP_OpticalFlow_PX4 optflow(ahrs);
+#if OPTFLOW == ENABLED
+static OpticalFlow optflow;
 #endif
- #endif
+
+// gnd speed limit required to observe optical flow sensor limits
+static float ekfGndSpdLimit;
+// scale factor applied to velocity controller gain to prevent optical flow noise causing excessive angle demand noise
+static float ekfNavVelGainScaler;
 
 ////////////////////////////////////////////////////////////////////////////////
 // GCS selection
@@ -578,18 +569,6 @@ static float baro_climbrate;        // barometer climbrate in cm/s
 // Current location of the copter
 static struct   Location current_loc;
 
-
-////////////////////////////////////////////////////////////////////////////////
-// Navigation Roll/Pitch functions
-////////////////////////////////////////////////////////////////////////////////
-#if OPTFLOW == ENABLED
-// The Commanded ROll from the autopilot based on optical flow sensor.
-static int32_t of_roll;
-// The Commanded pitch from the autopilot based on optical flow sensor. negative Pitch means go forward.
-static int32_t of_pitch;
-#endif // OPTFLOW == ENABLED
-
-
 ////////////////////////////////////////////////////////////////////////////////
 // Throttle integrator
 ////////////////////////////////////////////////////////////////////////////////
@@ -698,11 +677,6 @@ static AP_HAL::AnalogSource* rssi_analog_source;
 static AP_Mount camera_mount(&current_loc, ahrs, 0);
 #endif
 
-#if MOUNT2 == ENABLED
-// current_loc uses the baro/gps soloution for altitude rather than gps only.
-static AP_Mount camera_mount2(&current_loc, ahrs, 1);
-#endif
-
 ////////////////////////////////////////////////////////////////////////////////
 // AC_Fence library to reduce fly-aways
 ////////////////////////////////////////////////////////////////////////////////
@@ -737,6 +711,11 @@ static AP_EPM epm;
 #if PARACHUTE == ENABLED
 static AP_Parachute parachute(relay);
 #endif
+
+////////////////////////////////////////////////////////////////////////////////
+// Landing Gear Controller
+////////////////////////////////////////////////////////////////////////////////
+static AP_LandingGear landinggear;
 
 ////////////////////////////////////////////////////////////////////////////////
 // terrain handling
@@ -778,14 +757,14 @@ static const AP_Scheduler::Task scheduler_tasks[] PROGMEM = {
     { throttle_loop,         8,     45 },
     { update_GPS,            8,     90 },
 #if OPTFLOW == ENABLED
-    { update_optflow,        8,     20 },
+    { update_optical_flow,   2,     20 },
 #endif
     { update_batt_compass,  40,     72 },
     { read_aux_switches,    40,      5 },
     { arm_motors_check,     40,      1 },
     { auto_trim,            40,     14 },
     { update_altitude,      40,    100 },
-    { run_nav_updates,      40,     80 },
+    { run_nav_updates,       8,     80 },
     { update_thr_cruise,    40,     10 },
     { three_hz_loop,       133,      9 },
     { compass_accumulate,    8,     42 },
@@ -797,6 +776,7 @@ static const AP_Scheduler::Task scheduler_tasks[] PROGMEM = {
     { one_hz_loop,         400,     42 },
 //    { ekf_dcm_check,        40,      2 },
     { crash_check,          40,      2 },
+    { landinggear_update,   40,      1 },
     { gcs_check_input,	     8,    550 },
     { gcs_send_heartbeat,  400,    150 },
     { gcs_send_deferred,     8,    720 },
@@ -852,14 +832,14 @@ static const AP_Scheduler::Task scheduler_tasks[] PROGMEM = {
     { throttle_loop,         2,     450 },
     { update_GPS,            2,     900 },
 #if OPTFLOW == ENABLED
-    { update_optflow,        2,     100 },
+    { update_optical_flow,   1,     100 },
 #endif
     { update_batt_compass,  10,     720 },
     { read_aux_switches,    10,      50 },
     { arm_motors_check,     10,      10 },
     { auto_trim,            10,     140 },
     { update_altitude,      10,    1000 },
-    { run_nav_updates,      10,     800 },
+    { run_nav_updates,       4,     800 },
     { update_thr_cruise,     1,      50 },
     { three_hz_loop,        33,      90 },
     { compass_accumulate,    2,     420 },
@@ -871,6 +851,7 @@ static const AP_Scheduler::Task scheduler_tasks[] PROGMEM = {
     { one_hz_loop,         100,     420 },
     { ekf_dcm_check,        10,      20 },
     { crash_check,          10,      20 },
+    { landinggear_update,   10,      10 },
     { gcs_check_input,	     2,     550 },
     { gcs_send_heartbeat,  100,     150 },
     { gcs_send_deferred,     2,     720 },
@@ -1054,11 +1035,6 @@ static void update_mount()
     camera_mount.update_mount_position();
 #endif
 
-#if MOUNT2 == ENABLED
-    // update camera mount's position
-    camera_mount2.update_mount_position();
-#endif
-
 #if CAMERA == ENABLED
     camera.trigger_pic_cleanup();
 #endif
@@ -1177,10 +1153,6 @@ static void one_hz_loop()
 
 #if MOUNT == ENABLED
     camera_mount.update_mount_type();
-#endif
-
-#if MOUNT2 == ENABLED
-    camera_mount2.update_mount_type();
 #endif
 
     check_usb_mux();
@@ -1486,21 +1458,6 @@ static void tuning(){
         g.pid_rate_yaw.ff(tuning_value);
         break;        
 #endif
-
-    case CH6_OPTFLOW_KP:
-        g.pid_optflow_roll.kP(tuning_value);
-        g.pid_optflow_pitch.kP(tuning_value);
-        break;
-
-    case CH6_OPTFLOW_KI:
-        g.pid_optflow_roll.kI(tuning_value);
-        g.pid_optflow_pitch.kI(tuning_value);
-        break;
-
-    case CH6_OPTFLOW_KD:
-        g.pid_optflow_roll.kD(tuning_value);
-        g.pid_optflow_pitch.kD(tuning_value);
-        break;
 
     case CH6_AHRS_YAW_KP:
         ahrs._kp_yaw.set(tuning_value);

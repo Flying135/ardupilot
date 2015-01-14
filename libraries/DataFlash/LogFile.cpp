@@ -565,7 +565,10 @@ uint16_t DataFlash_Class::StartNewLog(void)
 {
     uint16_t ret;
     ret = start_new_log();
-
+    if (ret == 0xFFFF) {
+        // don't write out parameters if we fail to open the log
+        return ret;
+    }
     // write log formats so the log is self-describing
     for (uint8_t i=0; i<_num_types; i++) {
         Log_Write_Format(&_structures[i]);
@@ -756,20 +759,35 @@ void DataFlash_Class::Log_Write_RCOUT(void)
         chan12        : hal.rcout->read(11)
     };
     WriteBlock(&pkt, sizeof(pkt));
+    Log_Write_ESC();
 }
 
 // Write a BARO packet
 void DataFlash_Class::Log_Write_Baro(AP_Baro &baro)
 {
+    uint32_t now = hal.scheduler->millis();
     struct log_BARO pkt = {
         LOG_PACKET_HEADER_INIT(LOG_BARO_MSG),
-        timestamp     : hal.scheduler->millis(),
-        altitude      : baro.get_altitude(),
-        pressure	  : baro.get_pressure(),
-        temperature   : (int16_t)(baro.get_temperature() * 100),
+        timestamp     : now,
+        altitude      : baro.get_altitude(0),
+        pressure	  : baro.get_pressure(0),
+        temperature   : (int16_t)(baro.get_temperature(0) * 100),
         climbrate     : baro.get_climb_rate()
     };
     WriteBlock(&pkt, sizeof(pkt));
+#if BARO_MAX_INSTANCES > 1
+    if (baro.num_instances() > 1 && baro.healthy(1)) {
+        struct log_BARO pkt2 = {
+            LOG_PACKET_HEADER_INIT(LOG_BAR2_MSG),
+            timestamp     : now,
+            altitude      : baro.get_altitude(1),
+            pressure	  : baro.get_pressure(1),
+            temperature   : (int16_t)(baro.get_temperature(1) * 100),
+            climbrate     : baro.get_climb_rate()
+        };
+        WriteBlock(&pkt2, sizeof(pkt2));        
+    }
+#endif
 }
 
 // Write an raw accel/gyro data packet
@@ -786,7 +804,9 @@ void DataFlash_Class::Log_Write_IMU(const AP_InertialSensor &ins)
         gyro_z  : gyro.z,
         accel_x : accel.x,
         accel_y : accel.y,
-        accel_z : accel.z
+        accel_z : accel.z,
+        gyro_error  : ins.get_gyro_error_count(0),
+        accel_error : ins.get_accel_error_count(0)
     };
     WriteBlock(&pkt, sizeof(pkt));
     if (ins.get_gyro_count() < 2 && ins.get_accel_count() < 2) {
@@ -803,7 +823,9 @@ void DataFlash_Class::Log_Write_IMU(const AP_InertialSensor &ins)
         gyro_z  : gyro2.z,
         accel_x : accel2.x,
         accel_y : accel2.y,
-        accel_z : accel2.z
+        accel_z : accel2.z,
+        gyro_error  : ins.get_gyro_error_count(1),
+        accel_error : ins.get_accel_error_count(1)
     };
     WriteBlock(&pkt2, sizeof(pkt2));
     if (ins.get_gyro_count() < 3 && ins.get_accel_count() < 3) {
@@ -819,7 +841,9 @@ void DataFlash_Class::Log_Write_IMU(const AP_InertialSensor &ins)
         gyro_z  : gyro3.z,
         accel_x : accel3.x,
         accel_y : accel3.y,
-        accel_z : accel3.z
+        accel_z : accel3.z,
+        gyro_error  : ins.get_gyro_error_count(2),
+        accel_error : ins.get_accel_error_count(3)
     };
     WriteBlock(&pkt3, sizeof(pkt3));
 #endif
@@ -884,7 +908,7 @@ void DataFlash_Class::Log_Write_AHRS2(AP_AHRS &ahrs)
 }
 
 #if AP_AHRS_NAVEKF_AVAILABLE
-void DataFlash_Class::Log_Write_EKF(AP_AHRS_NavEKF &ahrs)
+void DataFlash_Class::Log_Write_EKF(AP_AHRS_NavEKF &ahrs, bool optFlowEnabled)
 {
 	// Write first EKF packet
     Vector3f euler;
@@ -930,7 +954,7 @@ void DataFlash_Class::Log_Write_EKF(AP_AHRS_NavEKF &ahrs)
         LOG_PACKET_HEADER_INIT(LOG_EKF2_MSG),
         time_ms : hal.scheduler->millis(),
         Ratio   : (int8_t)(100*ratio),
-        AZ1bias : (int8_t)(100*az2bias),
+        AZ1bias : (int8_t)(100*az1bias),
         AZ2bias : (int8_t)(100*az2bias),
         windN   : (int16_t)(100*wind.x),
         windE   : (int16_t)(100*wind.y),
@@ -972,9 +996,12 @@ void DataFlash_Class::Log_Write_EKF(AP_AHRS_NavEKF &ahrs)
 	Vector3f magVar;
 	float tasVar;
     Vector2f offset;
-    uint8_t faultStatus;
+    uint8_t faultStatus, timeoutStatus;
+    nav_filter_status solutionStatus;
     ahrs.get_NavEKF().getVariances(velVar, posVar, hgtVar, magVar, tasVar, offset);
     ahrs.get_NavEKF().getFilterFaults(faultStatus);
+    ahrs.get_NavEKF().getFilterTimeouts(timeoutStatus);
+    ahrs.get_NavEKF().getFilterStatus(solutionStatus);
     struct log_EKF4 pkt4 = {
         LOG_PACKET_HEADER_INIT(LOG_EKF4_MSG),
         time_ms : hal.scheduler->millis(),
@@ -987,9 +1014,39 @@ void DataFlash_Class::Log_Write_EKF(AP_AHRS_NavEKF &ahrs)
         sqrtvarVT : (int16_t)(100*tasVar),
         offsetNorth : (int8_t)(offset.x),
         offsetEast : (int8_t)(offset.y),
-        faults : (uint8_t)(faultStatus)
+        faults : (uint8_t)(faultStatus),
+        timeouts : (uint8_t)(timeoutStatus),
+        solution : (uint16_t)(solutionStatus.value)
     };
     WriteBlock(&pkt4, sizeof(pkt4));
+
+
+    // Write fifth EKF packet
+    if (optFlowEnabled) {
+        float normInnov; // normalised innovation variance ratio for optical flow observations fused by the main nav filter
+        float gndOffset; // estimated vertical position of the terrain relative to the nav filter zero datum
+        float flowInnovX, flowInnovY; // optical flow LOS rate vector innovations from the main nav filter
+        float auxFlowInnov; // optical flow LOS rate innovation from terrain offset estimator
+        float HAGL; // height above ground level
+        float rngInnov; // range finder innovations
+        float range; // measured range
+        float gndOffsetErr; // filter ground offset state error
+        ahrs.get_NavEKF().getFlowDebug(normInnov, gndOffset, flowInnovX, flowInnovY, auxFlowInnov, HAGL, rngInnov, range, gndOffsetErr);
+        struct log_EKF5 pkt5 = {
+            LOG_PACKET_HEADER_INIT(LOG_EKF5_MSG),
+            time_ms : hal.scheduler->millis(),
+            normInnov : (uint8_t)(min(100*normInnov,255)),
+            FIX : (int16_t)(1000*flowInnovX),
+            FIY : (int16_t)(1000*flowInnovY),
+            AFI : (int16_t)(1000*auxFlowInnov),
+            HAGL : (int16_t)(100*HAGL),
+            offset : (int16_t)(100*gndOffset),
+            RI : (int16_t)(100*rngInnov),
+            meaRng : (uint16_t)(100*range),
+            errHAGL : (uint16_t)(100*gndOffsetErr)
+         };
+        WriteBlock(&pkt5, sizeof(pkt5));
+    }
 }
 #endif
 
@@ -1054,4 +1111,45 @@ void DataFlash_Class::Log_Write_Camera(const AP_AHRS &ahrs, const AP_GPS &gps, c
         yaw         : (uint16_t)ahrs.yaw_sensor
     };
     WriteBlock(&pkt, sizeof(pkt));
+}
+
+// Write ESC status messages
+void DataFlash_Class::Log_Write_ESC(void)
+{
+#if CONFIG_HAL_BOARD == HAL_BOARD_PX4
+    static int _esc_status_sub = -1;
+    struct esc_status_s esc_status;
+
+    if (_esc_status_sub == -1) {
+        // subscribe to ORB topic on first call
+        _esc_status_sub = orb_subscribe(ORB_ID(esc_status));  
+    } 
+
+    // check for new ESC status data
+    bool esc_updated = false;
+    orb_check(_esc_status_sub, &esc_updated);
+    if (esc_updated && (OK == orb_copy(ORB_ID(esc_status), _esc_status_sub, &esc_status))) {
+        if (esc_status.esc_count > 8) {
+            esc_status.esc_count = 8;
+        }
+        uint32_t time_ms = hal.scheduler->millis();
+        for (uint8_t i = 0; i < esc_status.esc_count; i++) {
+            // skip logging ESCs with a esc_address of zero, and this
+            // are probably not populated. The Pixhawk itself should
+            // be address zero
+            if (esc_status.esc[i].esc_address != 0) {
+                struct log_Esc pkt = {
+                    LOG_PACKET_HEADER_INIT((uint8_t)(LOG_ESC1_MSG + i)),
+                    time_ms     : time_ms,
+                    rpm         : (int16_t)(esc_status.esc[i].esc_rpm/10),
+                    voltage     : (int16_t)(esc_status.esc[i].esc_voltage*100.f + .5f),
+                    current     : (int16_t)(esc_status.esc[i].esc_current*100.f + .5f),
+                    temperature : (int16_t)(esc_status.esc[i].esc_temperature*100.f + .5f)
+                };
+
+                WriteBlock(&pkt, sizeof(pkt));
+            }
+        }
+    }
+#endif // CONFIG_HAL_BOARD
 }

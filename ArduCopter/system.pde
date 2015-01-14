@@ -178,7 +178,6 @@ static void init_ardupilot()
 
     // identify ourselves correctly with the ground station
     mavlink_system.sysid = g.sysid_this_mav;
-    mavlink_system.type = 2; //MAV_QUADROTOR;
 
 #if LOGGING_ENABLED == ENABLED
     DataFlash.Init(log_structure, sizeof(log_structure)/sizeof(log_structure[0]));
@@ -216,6 +215,11 @@ static void init_ardupilot()
 
     if(g.compass_enabled)
         init_compass();
+
+#if OPTFLOW == ENABLED
+    // make optflow available to AHRS
+    ahrs.set_optflow(&optflow);
+#endif
 
     // initialise attitude and position controllers
     attitude_control.set_dt(MAIN_LOOP_SECONDS);

@@ -14,6 +14,11 @@
 #include <AP_AHRS.h>
 #include <stdint.h>
 
+#if CONFIG_HAL_BOARD == HAL_BOARD_PX4
+#include <uORB/topics/esc_status.h>
+#endif
+
+
 #if HAL_CPU_CLASS < HAL_CPU_CLASS_75 && defined(APM_BUILD_DIRECTORY)
   #if (APM_BUILD_TYPE(APM_BUILD_ArduCopter) || defined(__AVR_ATmega1280__))
     #define DATAFLASH_NO_CLI
@@ -64,13 +69,14 @@ public:
     void Log_Write_Power(void);
     void Log_Write_AHRS2(AP_AHRS &ahrs);
 #if AP_AHRS_NAVEKF_AVAILABLE
-    void Log_Write_EKF(AP_AHRS_NavEKF &ahrs);
+    void Log_Write_EKF(AP_AHRS_NavEKF &ahrs, bool optFlowEnabled);
 #endif
     void Log_Write_MavCmd(uint16_t cmd_total, const mavlink_mission_item_t& mav_cmd);
     void Log_Write_Radio(const mavlink_radio_t &packet);
     void Log_Write_Message(const char *message);
     void Log_Write_Message_P(const prog_char_t *message);
     void Log_Write_Camera(const AP_AHRS &ahrs, const AP_GPS &gps, const Location &current_loc);
+    void Log_Write_ESC(void);
 
     bool logging_started(void) const { return log_write_started; }
 
@@ -211,6 +217,7 @@ struct PACKED log_IMU {
     uint32_t timestamp;
     float gyro_x, gyro_y, gyro_z;
     float accel_x, accel_y, accel_z;
+    uint32_t gyro_error, accel_error;
 };
 
 struct PACKED log_RCIN {
@@ -338,6 +345,22 @@ struct PACKED log_EKF4 {
     int8_t  offsetNorth;
     int8_t  offsetEast;
     uint8_t faults;
+    uint8_t timeouts;
+    uint16_t solution;
+};
+
+struct PACKED log_EKF5 {
+    LOG_PACKET_HEADER;
+    uint32_t time_ms;
+    uint8_t normInnov;
+    int16_t FIX;
+    int16_t FIY;
+    int16_t AFI;
+    int16_t HAGL;
+    int16_t offset;
+    int16_t RI;
+    uint16_t meaRng;
+    uint16_t errHAGL;
 };
 
 struct PACKED log_Cmd {
@@ -428,6 +451,15 @@ struct PACKED log_Ubx3 {
     float sAcc;
 };
 
+struct PACKED log_Esc {
+    LOG_PACKET_HEADER;
+    uint32_t time_ms;     
+    int16_t rpm;
+    int16_t voltage;
+    int16_t current;
+    int16_t temperature;
+};
+
 // messages for all boards
 #define LOG_BASE_STRUCTURES \
     { LOG_FORMAT_MSG, sizeof(log_Format), \
@@ -437,7 +469,7 @@ struct PACKED log_Ubx3 {
     { LOG_GPS_MSG, sizeof(log_GPS), \
       "GPS",  "BIHBcLLeeEefI", "Status,TimeMS,Week,NSats,HDop,Lat,Lng,RelAlt,Alt,Spd,GCrs,VZ,T" }, \
     { LOG_IMU_MSG, sizeof(log_IMU), \
-      "IMU",  "Iffffff",     "TimeMS,GyrX,GyrY,GyrZ,AccX,AccY,AccZ" }, \
+      "IMU",  "IffffffII",     "TimeMS,GyrX,GyrY,GyrZ,AccX,AccY,AccZ,ErrG,ErrA" }, \
     { LOG_MESSAGE_MSG, sizeof(log_Message), \
       "MSG",  "Z",     "Message"}, \
     { LOG_RCIN_MSG, sizeof(log_RCIN), \
@@ -446,6 +478,8 @@ struct PACKED log_Ubx3 {
       "RCOU",  "Ihhhhhhhhhhhh",     "TimeMS,Ch1,Ch2,Ch3,Ch4,Ch5,Ch6,Ch7,Ch8,Ch9,Ch10,Ch11,Ch12" }, \
     { LOG_BARO_MSG, sizeof(log_BARO), \
       "BARO",  "Iffcf", "TimeMS,Alt,Press,Temp,CRt" }, \
+    { LOG_BAR2_MSG, sizeof(log_BARO), \
+      "BAR2",  "Iffcf", "TimeMS,Alt,Press,Temp,CRt" }, \
     { LOG_POWR_MSG, sizeof(log_POWR), \
       "POWR","ICCH","TimeMS,Vcc,VServo,Flags" },  \
     { LOG_CMD_MSG, sizeof(log_Cmd), \
@@ -460,9 +494,9 @@ struct PACKED log_Ubx3 {
     { LOG_GPS2_MSG, sizeof(log_GPS2), \
       "GPS2",  "BIHBcLLeEefIBI", "Status,TimeMS,Week,NSats,HDop,Lat,Lng,Alt,Spd,GCrs,VZ,T,DSc,DAg" }, \
     { LOG_IMU2_MSG, sizeof(log_IMU), \
-      "IMU2",  "Iffffff",     "TimeMS,GyrX,GyrY,GyrZ,AccX,AccY,AccZ" }, \
+      "IMU2",  "IffffffII",     "TimeMS,GyrX,GyrY,GyrZ,AccX,AccY,AccZ,ErrG,ErrA" }, \
     { LOG_IMU3_MSG, sizeof(log_IMU), \
-      "IMU3",  "Iffffff",     "TimeMS,GyrX,GyrY,GyrZ,AccX,AccY,AccZ" }, \
+      "IMU3",  "IffffffII",     "TimeMS,GyrX,GyrY,GyrZ,AccX,AccY,AccZ,ErrG,ErrA" }, \
     { LOG_AHR2_MSG, sizeof(log_AHRS), \
       "AHR2","IccCfLL","TimeMS,Roll,Pitch,Yaw,Alt,Lat,Lng" }, \
     { LOG_SIMSTATE_MSG, sizeof(log_AHRS), \
@@ -474,7 +508,7 @@ struct PACKED log_Ubx3 {
     { LOG_EKF3_MSG, sizeof(log_EKF3), \
       "EKF3","Icccccchhhc","TimeMS,IVN,IVE,IVD,IPN,IPE,IPD,IMX,IMY,IMZ,IVT" }, \
     { LOG_EKF4_MSG, sizeof(log_EKF4), \
-      "EKF4","IcccccccbbB","TimeMS,SV,SP,SH,SMX,SMY,SMZ,SVT,OFN,EFE,FS" }, \
+      "EKF4","IcccccccbbBBH","TimeMS,SV,SP,SH,SMX,SMY,SMZ,SVT,OFN,EFE,FS,TS,SS" }, \
     { LOG_TERRAIN_MSG, sizeof(log_TERRAIN), \
       "TERR","IBLLHffHH","TimeMS,Status,Lat,Lng,Spacing,TerrH,CHeight,Pending,Loaded" }, \
     { LOG_UBX1_MSG, sizeof(log_Ubx1), \
@@ -482,7 +516,25 @@ struct PACKED log_Ubx3 {
     { LOG_UBX2_MSG, sizeof(log_Ubx2), \
       "UBX2", "IBbBbB", "TimeMS,Instance,ofsI,magI,ofsQ,magQ" }, \
     { LOG_UBX3_MSG, sizeof(log_Ubx3), \
-      "UBX3", "IBfff", "TimeMS,Instance,hAcc,vAcc,sAcc" }
+      "UBX3", "IBfff", "TimeMS,Instance,hAcc,vAcc,sAcc" }, \
+    { LOG_ESC1_MSG, sizeof(log_Esc), \
+      "ESC1",  "Icccc", "TimeMS,RPM,Volt,Curr,Temp" }, \
+    { LOG_ESC2_MSG, sizeof(log_Esc), \
+      "ESC2",  "Icccc", "TimeMS,RPM,Volt,Curr,Temp" }, \
+    { LOG_ESC3_MSG, sizeof(log_Esc), \
+      "ESC3",  "Icccc", "TimeMS,RPM,Volt,Curr,Temp" }, \
+    { LOG_ESC4_MSG, sizeof(log_Esc), \
+      "ESC4",  "Icccc", "TimeMS,RPM,Volt,Curr,Temp" }, \
+    { LOG_ESC5_MSG, sizeof(log_Esc), \
+      "ESC5",  "Icccc", "TimeMS,RPM,Volt,Curr,Temp" }, \
+    { LOG_ESC6_MSG, sizeof(log_Esc), \
+      "ESC6",  "Icccc", "TimeMS,RPM,Volt,Curr,Temp" }, \
+    { LOG_ESC7_MSG, sizeof(log_Esc), \
+      "ESC7",  "Icccc", "TimeMS,RPM,Volt,Curr,Temp" }, \
+    { LOG_ESC8_MSG, sizeof(log_Esc), \
+      "ESC8",  "Icccc", "TimeMS,RPM,Volt,Curr,Temp" }, \
+    { LOG_EKF5_MSG, sizeof(log_EKF5), \
+      "EKF5","IBhhhcccCC","TimeMS,normInnov,FIX,FIY,AFI,HAGL,offset,RI,meaRng,errHAGL" }
 
 #if HAL_CPU_CLASS >= HAL_CPU_CLASS_75
 #define LOG_COMMON_STRUCTURES LOG_BASE_STRUCTURES, LOG_EXTRA_STRUCTURES
@@ -519,6 +571,16 @@ struct PACKED log_Ubx3 {
 #define LOG_UBX1_MSG      151
 #define LOG_UBX2_MSG      152
 #define LOG_UBX3_MSG      153
+#define LOG_ESC1_MSG      154
+#define LOG_ESC2_MSG      155
+#define LOG_ESC3_MSG      156
+#define LOG_ESC4_MSG      157
+#define LOG_ESC5_MSG      158
+#define LOG_ESC6_MSG      159
+#define LOG_ESC7_MSG      160
+#define LOG_ESC8_MSG      161
+#define LOG_EKF5_MSG      162
+#define LOG_BAR2_MSG	  163
 
 // message types 200 to 210 reversed for GPS driver use
 // message types 211 to 220 reversed for autotune use

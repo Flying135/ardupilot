@@ -57,6 +57,7 @@
 #define AUX_SWITCH_ATTCON_ACCEL_LIM 26      // enable/disable the roll, pitch and yaw accel limiting
 #define AUX_SWITCH_RETRACT_MOUNT    27      // Retract Mount
 #define AUX_SWITCH_RELAY            28      // Relay pin on/off (only supports first relay)
+#define AUX_SWITCH_LANDING_GEAR     29      // Landing gear controller
 
 // values used by the ap.ch7_opt and ap.ch8_opt flags
 #define AUX_SWITCH_LOW              0       // indicates auxiliar switch is in the low position (pwm <1200)
@@ -129,9 +130,9 @@
 #define CH6_ACRO_YAW_KP                 40  // acro controller's P term.  converts pilot input to a desired roll, pitch or yaw rate
 #define CH6_RELAY                       9   // deprecated -- remove
 #define CH6_HELI_EXTERNAL_GYRO          13  // TradHeli specific external tail gyro gain
-#define CH6_OPTFLOW_KP                  17  // optical flow loiter controller's P term (position error to tilt angle)
-#define CH6_OPTFLOW_KI                  18  // optical flow loiter controller's I term (position error to tilt angle)
-#define CH6_OPTFLOW_KD                  19  // optical flow loiter controller's D term (position error to tilt angle)
+#define CH6_OPTFLOW_KP                  17  // deprecated -- remove
+#define CH6_OPTFLOW_KI                  18  // deprecated -- remove
+#define CH6_OPTFLOW_KD                  19  // deprecated -- remove
 #define CH6_AHRS_YAW_KP                 30  // ahrs's compass effect on yaw angle (0 = very low, 1 = very high)
 #define CH6_AHRS_KP                     31  // accelerometer effect on roll/pitch angle (0=low)
 #define CH6_INAV_TC                     32  // deprecated -- remove
@@ -187,7 +188,8 @@ enum AutoMode {
 enum GuidedMode {
     Guided_TakeOff,
     Guided_WP,
-    Guided_Velocity
+    Guided_Velocity,
+    Guided_PosVel
 };
 
 // RTL states
@@ -302,6 +304,8 @@ enum FlipState {
 #define DATA_PARACHUTE_DISABLED         49
 #define DATA_PARACHUTE_ENABLED          50
 #define DATA_PARACHUTE_RELEASED         51
+#define DATA_LANDING_GEAR_DEPLOYED      52
+#define DATA_LANDING_GEAR_RETRACTED     53
 
 // Centi-degrees to radians
 #define DEGX100 5729.57795f
@@ -403,6 +407,13 @@ enum FlipState {
 #define FS_GPS_ALTHOLD                      2       // switch to ALTHOLD mode on GPS failsafe
 #define FS_GPS_LAND_EVEN_STABILIZE          3       // switch to LAND mode on GPS failsafe even if in a manual flight mode like Stabilize
 
+// for mavlink SET_POSITION_TARGET messages
+#define MAVLINK_SET_POS_TYPE_MASK_POS_IGNORE      ((1<<0) | (1<<1) | (1<<2))
+#define MAVLINK_SET_POS_TYPE_MASK_VEL_IGNORE      ((1<<3) | (1<<4) | (1<<5))
+#define MAVLINK_SET_POS_TYPE_MASK_ACC_IGNORE      ((1<<6) | (1<<7) | (1<<8))
+#define MAVLINK_SET_POS_TYPE_MASK_FORCE           (1<<10)
+#define MAVLINK_SET_POS_TYPE_MASK_YAW_IGNORE      (1<<11)
+#define MAVLINK_SET_POS_TYPE_MASK_YAW_RATE_IGNORE (1<<12)
 
 enum Serial2Protocol {
     SERIAL2_MAVLINK     = 1,

@@ -241,11 +241,10 @@ struct PACKED log_Optflow {
     LOG_PACKET_HEADER;
     uint32_t time_ms;
     uint8_t surface_quality;
-    int16_t raw_x;
-    int16_t raw_y;
-    float vel_x;
-    float vel_y;
-    float dist;
+    float flow_x;
+    float flow_y;
+    float body_x;
+    float body_y;
 };
 
 // Write an optical flow packet
@@ -256,17 +255,16 @@ static void Log_Write_Optflow()
     if (!optflow.enabled()) {
         return;
     }
-    const Vector2i &raw = optflow.raw();
-    const Vector2f &vel = optflow.velocity();
+    const Vector2f &flowRate = optflow.flowRate();
+    const Vector2f &bodyRate = optflow.bodyRate();
     struct log_Optflow pkt = {
         LOG_PACKET_HEADER_INIT(LOG_OPTFLOW_MSG),
         time_ms         : hal.scheduler->millis(),
         surface_quality : optflow.quality(),
-        raw_x           : raw.x,
-        raw_y           : raw.y,
-        vel_x           : vel.x,
-        vel_y           : vel.y,
-        dist            : optflow.ground_distance_m()
+        flow_x          : flowRate.x,
+        flow_y          : flowRate.y,
+        body_x          : bodyRate.x,
+        body_y          : bodyRate.y
     };
     DataFlash.WriteBlock(&pkt, sizeof(pkt));
  #endif     // OPTFLOW == ENABLED
@@ -493,7 +491,11 @@ static void Log_Write_Attitude()
     DataFlash.WriteBlock(&pkt, sizeof(pkt));
 
 #if AP_AHRS_NAVEKF_AVAILABLE
-    DataFlash.Log_Write_EKF(ahrs);
+ #if OPTFLOW == ENABLED
+    DataFlash.Log_Write_EKF(ahrs,optflow.enabled());
+ #else
+    DataFlash.Log_Write_EKF(ahrs,false);
+ #endif
     DataFlash.Log_Write_AHRS2(ahrs);
 #endif
 #if CONFIG_HAL_BOARD == HAL_BOARD_AVR_SITL
@@ -676,7 +678,7 @@ static const struct LogStructure log_structure[] PROGMEM = {
     { LOG_CURRENT_MSG, sizeof(log_Current),             
       "CURR", "IhIhhhf",     "TimeMS,ThrOut,ThrInt,Volt,Curr,Vcc,CurrTot" },
     { LOG_OPTFLOW_MSG, sizeof(log_Optflow),       
-      "OF",   "IBhhfff",   "TimeMS,Qual,RawX,RawY,VelX,VelY,Dist" },
+      "OF",   "IBffff",   "TimeMS,Qual,flowX,flowY,bodyX,bodyY" },
     { LOG_NAV_TUNING_MSG, sizeof(log_Nav_Tuning),       
       "NTUN", "Iffffffffff", "TimeMS,DPosX,DPosY,PosX,PosY,DVelX,DVelY,VelX,VelY,DAccX,DAccY" },
     { LOG_CONTROL_TUNING_MSG, sizeof(log_Control_Tuning),
